@@ -1,0 +1,75 @@
+Fonctionnalité de l'app:
+
++Permet d'avoir accès à de la documentation sur les 6 chapitres du cours.
+    - Chaque chapitre sera divisé en sous-section.
+        - Lire une section, permet de gagné X points réservé à l'achat de coraux
+        - Des liens vers des vidéos des ressources externes complémentaires à la documentation.
+
++Permet de faire des exercices sur les 6 chapitres
+    -Les exercices d'un chapitre sont divisés en séances avec difficulté de 1-3
+    -Des exercices de types V/F, choix de réponses, problèmes mathématiques et preuves.
+    -Correction complète disponible
+        -(l'algorithme de résolution de calcul fait par nous)
+
++Permet de visualiser son progrès avec les points de progrès X et son aquarium
+    -Acheter de nouveaux coraux (décoration d'aquarium)
+    -Acheter de nouveaux poissons
+    -Nourrir poisson?
+
++Permet d'affronter d'autres élèves
+    -Compétition poisson/connaissance Kahoot (Des exercices de types V/F, choix de réponses)
+        -Lancer une attaque (répondre à une question d'un niveau de difficulté correspondant à celui de l'attaque?)
+            - Si la réponse n'est pas la bonne, attaque n'a pas lieu et des points X sont déduit à
+              l'utilisateur qui a lancer l'attaque
+            - Sinon, l'attaque à lieu
+        -Défendre (répondre à une question d'un niveau de difficulté correspondant à celui de la défense voulu ?)
+    -Si l'utilisateur gagne le combat, il gagne des points de progrès X
+
++Permet de créer un compte de type étudiants ou enseignant.
+    -Étudiant
+        -Sauvegarder son progrès dans les exercices
+        -Avoir accès à la matière et des resources
+        +Points de progrès permettent de faire X(à déterminer)
+    -Professeur
+        -Voir le progrès des étudiants associé à sa classe (stats)
+        -Voir les exercices les moins réussi par les élèves (stats)
+        -Régression linéaire [temps passé sur l'app et le taux de réussite aux exercices]
+
+ .... .... .... .... .... .... .... .... .... .... .... .... .... .... .... .... .... .... .... .... .... ....
+Si tout doit être contenue dans un sans interaction avec d'autres users
+Math discrète:
+
++Permet d'avoir accès à de la documentation sur les 6 chapitres du cours.
+    - Chaque chapitre sera divisé en sous-section.
+        - Lire une section, permet de gagné X points réservé à l'achat de coraux
+        - Des liens vers des vidéos des ressources externes complémentaires à la documentation.
+
++Permet de faire des exercices sur les 6 chapitres
+    -Les exercices d'un chapitre sont divisés en séances avec difficulté de 1-3
+    -Des exercices de types V/F, choix de réponses, problèmes mathématiques et preuves.
+    -Correction complète disponible
+        -(l'algorithme de résolution de calcul fait par nous)
+
++Permet de visualiser son progrès avec les points de progrès X et son aquarium
+    -Acheter de nouveaux coraux (décoration d'aquarium)
+    -Acheter de nouveaux poissons
+    -Nourrir poisson?
+
+-----------------------------------------------------------------------------------------------------------------
+Déroulement App Utilisateur(Exemple de 1ère utilisation)
+
+1. Choisir compte Étudiant(1), compte Professeur(2), visiteur(même que 1) + progression
+                                                     sauvegarder le temps que l'app est ouverte)
+2.1 et 2.2 Choisir une matière
+3.1 Rejoindre un groupe
+3.2 Créer un groupe
+4.1 Voir la matière ou exercice
+4.2 Voir le résultat des élèves aux exercices d'un des groupe + stats
+
+
+
+
+
+
+
+

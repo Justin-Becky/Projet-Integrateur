@@ -1,0 +1,59 @@
+Plan code(section):
+
+Section compte personnelle
+    -VISITEUR
+        seulement accès matière?
+        seulement accès mode étudiant?
+    -ÉTUDIANT
+     Attributs de la base de données:
+        -DA
+        -Prénom
+        -Nom
+        -Mot de passe
+        -Temps sur l'app
+        -cours
+        -Progression dans les exercices
+    -PROFESSEUR
+    Attributs de la base de données:
+        -Prénom
+        -Nom
+        -Mot de passe
+        -Cours
+        -Liste étudiants
+
+Section exercice
+    -plusieurs exercices de trois niveaux différents(temps requis ou difficulté).
+    -certains générés aléatoirement pour ne pas toujours tombés sur le même.
+
+Section correction exercice
+    -algorithme de correction fait par nous et automatiser
+    -version abréger ou complète après deux essais ou trois ??
+
+Section matière
+    -Explication avec des mots,visuelle ou en symbolisme mathématique.
+
+Section aquarium
+
+-----------------------------------------------------------------------------------------------------------------
+MVC
+
+MODÈLE
+    -classe Étudiant
+        -créer un étudiant lorsqu'un compte étudiant est créé et l'ajoute à la BD étudiant
+    -classe Professeur
+        -créer un professeur lorsqu'un compte professeur est créé et l'ajoute à la BD étudiant
+    -classe Cours
+
+VUE
+    -classe App
+    -classe Plante
+
+CONTRÔLEUR
+    -classe Intéraction
+
+-----------------------------------------------------------------------------------------------------------------
+
+
+
+
+
