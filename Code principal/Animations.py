@@ -1,11 +1,7 @@
 import random
 import math
-
-from PySide6.QtCore import QObject, QVariantAnimation, QEasingCurve, QPointF, QTimer
+from PySide6.QtCore import QObject, QVariantAnimation, QEasingCurve, QPointF
 from PySide6.QtWidgets import QGraphicsPixmapItem
-from PySide6.QtGui import QPixmap, QTransform
-from PySide6.QtCore import Qt
-
 
 # ===================================================
 # Classes d'animation pour l'aquarium
@@ -94,8 +90,6 @@ class AnimationBulle(QObject):
         self.regarde_gauche = regarde_gauche
 
         # ── Points clés du trajet ──
-        # IMPORTANT : pos_bouche doit être la position RÉELLE du poisson,
-        # la bulle est positionnée via setPos() dans creer_bulle() AVANT d'appeler cette classe
 
         # Point A : bouche du poisson (départ)
         self.pos_a = QPointF(pos_bouche)
