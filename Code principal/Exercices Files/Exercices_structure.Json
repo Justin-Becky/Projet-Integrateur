@@ -7,6 +7,15 @@
         "type": "subtitle",
         "title": "Chapitre 1",
         "description": "Logique et preuves mathématiques",
+        "color": [
+          {
+            "title": "#8A5A44",
+            "button-background": "#E76F51",
+            "button-border": "#9A3B26",
+            "button-text": "#FFFFFF",
+            "button-hovered-text": "#FFE5D9"
+          }
+        ],
         "content": [
           {
             "type": "section",
@@ -32,6 +41,15 @@
         "type": "subtitle",
         "title": "Chapitre 2",
         "description": "Techniques de dénombrement",
+        "color": [
+          {
+            "title": "#2A9D8F",
+            "button-background": "#264653",
+            "button-border": "#1A323C",
+            "button-text": "#FFFFFF",
+            "button-hovered-text": "#A8DADC"
+          }
+        ],
         "content": [
           {
             "type": "section",
@@ -75,6 +93,15 @@
         "type": "subtitle",
         "title": "Chapitre 3",
         "description": "Théorie des ensembles et fonctions",
+        "color": [
+          {
+            "title": "#E9C46A",
+            "button-background": "#E9C46A",
+            "button-border": "#B58E36",
+            "button-text": "#264653",
+            "button-hovered-text": "#FFFFFF"
+          }
+        ],
         "content": [
           {
             "type": "section",
@@ -94,6 +121,15 @@
         "type": "subtitle",
         "title": "Chapitre 4",
         "description": "Théorie des graphes",
+        "color": [
+          {
+            "title": "#F4A261",
+            "button-background": "#2A9D8F",
+            "button-border": "#1D7066",
+            "button-text": "#FFFFFF",
+            "button-hovered-text": "#E0F2F1"
+          }
+        ],
         "content": [
           {
             "type": "section",
@@ -155,6 +191,15 @@
         "type": "subtitle",
         "title": "Chapitre 5",
         "description": "Récurrences linéaires",
+        "color": [
+          {
+            "title": "#E76F51",
+            "button-background": "#F4A261",
+            "button-border": "#C66D2D",
+            "button-text": "#264653",
+            "button-hovered-text": "#FFFFFF"
+          }
+        ],
         "content": [
           {
             "type": "section",
@@ -174,6 +219,15 @@
         "type": "subtitle",
         "title": "Chapitre 6",
         "description": "Théorie des nombres et algorithmes",
+        "color": [
+          {
+            "title": "#8A5A44",
+            "button-background": "#8A5A44",
+            "button-border": "#5D3A29",
+            "button-text": "#FFFFFF",
+            "button-hovered-text": "#ECDAD0"
+          }
+        ],
         "content": [
           {
             "type": "section",

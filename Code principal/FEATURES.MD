@@ -1,2 +1,2 @@
 1. Arranger les animations pour que les poissons ne s'aglomaires plus sur les coter et en bas
-2. 
+2. changer le bouton pour que ca soit un menu pour acheter des poissons et pour voir l'inventaire de ses poissons
