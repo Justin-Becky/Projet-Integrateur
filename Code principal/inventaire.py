@@ -1,6 +1,6 @@
 from pathlib import Path
-from PySide6.QtCore import Qt, QMimeData, QByteArray
-from PySide6.QtGui import QPixmap, QDrag
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QScrollArea, QSizePolicy, QGridLayout
 from market import RoundedWidget
 from collections import Counter
@@ -154,7 +154,6 @@ class Inventaire(QWidget):
 
         return layout
 
-    
 
 class SlotPoisson(QLabel):
     def __init__(self, aquarium, index, nom_poisson, parent=None):

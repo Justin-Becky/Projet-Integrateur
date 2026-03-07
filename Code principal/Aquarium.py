@@ -39,13 +39,13 @@ MARGE = 0
 MOULA = 10000
 # --- Multiplicateur de vitesse des animations ---
 # Plus la valeur est grande, plus les animations sont lentes
-FACTEUR_LENTEUR = 1
+FACTEUR_LENTEUR = 0.1
 
 # Constante pour la largeur du market
 LARGEUR_MARKET = 500
 LARGEUR_INVENTAIRE = 120
 
-# <editor-fold desc="Clamping dynamique avec support des crabes">
+# <editor-fold desc="Clamping dynamique">
 # --- Garde une position dans les limites de la scène ---
 def clamper_position(x, y, largeur_poisson, hauteur_poisson, poisson):
     limite_gauche = LARGEUR_MARKET + 50 if poisson.aquarium and poisson.aquarium.proxy_market else MARGE
@@ -56,11 +56,12 @@ def clamper_position(x, y, largeur_poisson, hauteur_poisson, poisson):
         y = MARGE
     elif poisson.n == 23:
         x = max(limite_gauche, min(x, limite_droite))
-        y = poisson.aquarium.height() - 2 * poisson.poisson.height() // 3
+        y = max(int(poisson.aquarium.height()) - 160 + 2 * hauteur_poisson // 3, min(
+            y, poisson.aquarium.height() - 2 * hauteur_poisson // 3))
     else:
         # Décaler la limite gauche si le market est ouvert
         x = max(limite_gauche, min(x, limite_droite))
-        y = max(MARGE, min(y, poisson.aquarium.height() - hauteur_poisson))
+        y = max(MARGE + 2 * hauteur_poisson // 3, min(y, poisson.aquarium.height() - 175))
     return x, y
 
 # </editor-fold>
@@ -345,6 +346,7 @@ class Aquarium(QGraphicsScene):
             if self.poissons:
                 dernier = self.poissons[-1]
                 dernier.setPos(pos.x() - dernier.pixmap().width() / 2, pos.y() - dernier.pixmap().height() / 2)
+                dernier.verifier_collisions()
                 delai = random.randint(500, 2000)
                 QTimer.singleShot(delai, lambda: self.lancer_animation_aleatoire(dernier))
 
@@ -442,12 +444,12 @@ class Aquarium(QGraphicsScene):
         self.floors.clear()
 
         tile_width = 320
-        y = self.height() - 100
+        y = self.height() - 160
 
         count = int(self.width() / tile_width) + 2
 
         for i in range(count):
-            chemin_sol = IMG_DIR / "img_3.png"
+            chemin_sol = IMG_DIR / "Sand_ground_melt.png"
             floor = QGraphicsPixmapItem(QPixmap(str(chemin_sol)))
             floor.setScale(1)
             floor.setPos(i * tile_width - tile_width, y)
@@ -525,7 +527,8 @@ class Aquarium(QGraphicsScene):
             ]
         elif poisson.n == 22 or poisson.n == 23:
             animations = [
-                self.animation_nager_horizontal
+                self.animation_nager_horizontal,
+                self.animation_nager_diagonal
             ]
         else:
             animations = [

@@ -1,7 +1,7 @@
-
-from PySide6 import QtCore, QtGui, QtWidgets
+from PIL.ImageQt import QPixmap
+from PySide6 import QtCore, QtWidgets
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QIcon, QFont, QPixmap
+from PySide6.QtGui import QIcon, QFont
 from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QVBoxLayout, QWidget, QToolButton, QMenu, \
     QScrollArea, QLabel, QHBoxLayout, QTextBrowser
 from Aquarium import AquariumWidget
@@ -118,6 +118,7 @@ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
     background: none;
 }
 """
+
 
 class ExercicesWindow(QMainWindow):
     def __init__(self):
@@ -292,7 +293,11 @@ class ExercicesWindow(QMainWindow):
 
                 section_content.setStyleSheet("background-color: #F0DFC4;")
 
-                collapsible = CollapsibleSection(j['title'], j['description'], section_content, color=j['color'][0]['title'], expanded=False)
+                collapsible = CollapsibleSection(j['title'],
+                                                 j['description'],
+                                                 section_content,
+                                                 color=j['color'][0]['title'],
+                                                 expanded=False)
                 self.content_layout.addWidget(collapsible)
 
                 button_section_holder = QWidget()
@@ -306,7 +311,8 @@ class ExercicesWindow(QMainWindow):
                     row_layout.setSpacing(10)
 
                     background_color, border_color, text_color, hovered_color = j['color'][0]['button-background'], \
-                    j['color'][0]['button-border'], j['color'][0]['button-text'], j['color'][0]['button-hovered-text']
+                        j['color'][0]['button-border'], j['color'][0]['button-text'], j['color'][0][
+                        'button-hovered-text']
                     btn_style = f"""
                                             QPushButton {{
                                                 background-color: {background_color};
@@ -320,14 +326,21 @@ class ExercicesWindow(QMainWindow):
 
                     matiere_btn = QPushButton("Matière " + k['title'])
                     matiere_btn.setProperty("class", "action_btn")
-                    matiere_btn.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
-                    matiere_btn.clicked.connect(lambda _, link="../Exercices/matiere_" + str(k['id']) + ".html", info = (j['title'], k['title']): self.open_matiere(link, info))
+                    matiere_btn.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
+                                              QtWidgets.QSizePolicy.Policy.Fixed)
+                    matiere_btn.clicked.connect(lambda _,
+                                                link="../Exercices/matiere_" + str(k['id']) + ".html",
+                                                info=(j['title'], k['title']): self.open_matiere(link, info))
                     matiere_btn.setStyleSheet(btn_style)
 
                     exercices_btn = QPushButton("Exercices " + k['title'])
                     exercices_btn.setProperty("class", "action_btn")
-                    exercices_btn.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Fixed)
-                    exercices_btn.clicked.connect(lambda _, link="../Exercices/exercice_" + str(k['id']) + ".json": self.open_exercises(link))
+                    exercices_btn.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding,
+                                                QtWidgets.QSizePolicy.Policy.Fixed)
+                    exercices_btn.clicked.connect(
+                        lambda _,
+                        link="../Exercices/exercice_" + str(k['id']) + ".json": self.open_exercises(link)
+                    )
                     exercices_btn.setStyleSheet(btn_style)
 
                     row_layout.addWidget(matiere_btn, 1)
@@ -335,7 +348,7 @@ class ExercicesWindow(QMainWindow):
 
                     section_layout.addWidget(row_widget)
 
-                    if idx != len(j['content']) -1:
+                    if idx != len(j['content']) - 1:
                         separator_line = QWidget()
                         separator_line.setFixedHeight(2)
                         separator_line.setStyleSheet("background-color: #E8C89C; margin: 15px 0;")
@@ -366,7 +379,8 @@ class ExercicesWindow(QMainWindow):
 
 
 class CollapsibleSection(QtWidgets.QWidget):
-    def __init__(self, title: str, description: str, content_widget: QWidget = None, *, parent=None, color, expanded: bool = True):
+    def __init__(self, title: str, description: str, content_widget: QWidget = None, *, parent=None, color,
+                 expanded: bool = True):
         super().__init__(parent)
 
         self.arrow_btn = QtWidgets.QToolButton()
@@ -376,7 +390,14 @@ class CollapsibleSection(QtWidgets.QWidget):
         self.arrow_btn.setCursor(QtCore.Qt.CursorShape.PointingHandCursor)
         self.arrow_btn.setStyleSheet("QToolButton { border: none; padding: 0 8px; }")
 
-        self.title_label = QLabel(f"<span style='font-weight:bold; font-size:18px; color:{color}'>{title}</span> <span style='color:#555; font-size: 14px;'>{description}</span>")
+        self.title_label = QLabel(f"<span "
+                                  f"style='font-weight:bold; "
+                                  f"font-size:18px; "
+                                  f"color:{color}'>{title}</span> "
+                                  f"<span style='color:#555; "
+                                  f"font-size: 14px;"
+                                  f"'>{description}</span>"
+                                  )
 
         header = QWidget()
         header_layout = QHBoxLayout(header)
@@ -387,6 +408,7 @@ class CollapsibleSection(QtWidgets.QWidget):
 
         def header_mouse_press(event):
             self.arrow_btn.toggle()
+
         header.mousePressEvent = header_mouse_press
 
         # Content area that will be collapsed/expanded
