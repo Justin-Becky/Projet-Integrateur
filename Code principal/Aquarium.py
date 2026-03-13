@@ -1,76 +1,23 @@
 import random
 import math
-from pathlib import Path
 
 from PySide6 import QtWidgets
 from PySide6.QtCore import QPointF, QRectF, Qt, QEasingCurve, QTimer
 from PySide6.QtWidgets import (QGraphicsScene, QGraphicsPixmapItem, QGraphicsView, QWidget,
-                               QVBoxLayout, QLabel, QGraphicsColorizeEffect, QGraphicsDropShadowEffect)
-from PySide6.QtGui import QPixmap, QColorConstants, QLinearGradient, QTransform, QColor
+                               QVBoxLayout, QLabel, QGraphicsColorizeEffect)
+from PySide6.QtGui import QPixmap, QColorConstants, QLinearGradient, QColor
 from Animations import AnimationBulle, AnimationPosition, AnimationRotation, AnimationScale
 from market import Market
 from inventaire import Inventaire
-
-# ===================================================
-# Liste d'évolution des poissons
-# ===================================================
-EVOLUTION_POISSON = [
-    "basic_rouge", "poisson_jaune", "poisson_rayé", "green_bass", "saumon_bleu",
-    "martin", "goldfish", "goldfish_long", "dore", "preuve_moyenne",
-    "gros_rouge", "doris_sans_rayure", "doris_jaune", "doris_kawaii", "doris_oeil_aubernoir",
-    "doris_og", "doris_bleu", "doris_brun", "doris_rouge", "doris_vert",
-    "doris_rose", "hippocampe", "mouette", "crabe", "meduse",
-    "puff", "poisson_mauve", "goldfish_jolie", "raie_manta", "dauphin",
-    "baleine", "poisson_lion_fluo", "preuves", "preuve_complexe", "doris_shaded",
-    "doris_skinny", "crevette", "anguille_cute", "poisson_chirurgien", "george_bleu",
-    "beta_bleu", "Gill", "poisson_tournesol", "sunfish", "poisson_lune",
-    "poisson_lune_bleu", "poisson_globe_bleu", "ton", "espadon", "espadon_croche",
-    "poisson_lumiere", "poisson_lumiere2", "requin_baleine", "pokemon", "pokemon_licorne",
-    "pokemon_magikarp",
-]
-
-# path
-BASE_DIR = Path(__file__).parent
-IMG_DIR = BASE_DIR / "../Images"
-PIXEL_ART_DIR = IMG_DIR / "pixel-art"
-
-# --- Constantes de la scène ---
-MARGE = 0
-MOULA = 10000
-# --- Multiplicateur de vitesse des animations ---
-# Plus la valeur est grande, plus les animations sont lentes
-FACTEUR_LENTEUR = 1
-
-# Constante pour la largeur du market
-LARGEUR_MARKET = 500
-LARGEUR_INVENTAIRE = 120
-
-# <editor-fold desc="Clamping dynamique">
-# --- Garde une position dans les limites de la scène ---
-def clamper_position(x, y, largeur_poisson, hauteur_poisson, poisson):
-    limite_gauche = LARGEUR_MARKET + 50 if poisson.aquarium and poisson.aquarium.proxy_market else MARGE
-    limite_droite = poisson.aquarium.width() - LARGEUR_INVENTAIRE - largeur_poisson - 25 if \
-        poisson.aquarium and poisson.aquarium.proxy_inventaire else poisson.aquarium.width() - largeur_poisson - MARGE
-    if poisson.n == 22:
-        x = max(limite_gauche, min(x, limite_droite))
-        y = MARGE
-    elif poisson.n == 23:
-        x = max(limite_gauche, min(x, limite_droite))
-        y = max(int(poisson.aquarium.height()) - 160 + 2 * hauteur_poisson // 3, min(
-            y, poisson.aquarium.height() - 2 * hauteur_poisson // 3))
-    else:
-        # Décaler la limite gauche si le market est ouvert et décalé la limite de droite si l'inventaire est ouvert.
-        x = max(limite_gauche, min(x, limite_droite))
-        y = max(MARGE + 2 * hauteur_poisson // 3, min(y, poisson.aquarium.height() - 175))
-    return x, y
-
-# </editor-fold>
+from pixmap import Poisson, Bulles, Etoile, PixmapCliquable
+from config import IMG_DIR, MOULA, FACTEUR_LENTEUR, EVOLUTION_POISSON
+import config
+from outils import clamper_position
 
 
 # ===================================================
 # Fenêtre principale de l'application Aquarium
 # ===================================================
-
 class AquariumWidget(QWidget):
 
     def __init__(self, application):
@@ -308,13 +255,13 @@ class Aquarium(QGraphicsScene):
             return
 
         inventaire = Inventaire(self, self.inventaire_poissons, EVOLUTION_POISSON)
-        inventaire.setFixedSize(LARGEUR_INVENTAIRE, int(self.height()))
+        inventaire.setFixedSize(config.LARGEUR_INVENTAIRE, int(self.height()))
         inventaire.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         inventaire.setAutoFillBackground(False)
 
         self.proxy_inventaire = self.addWidget(inventaire)
         self.proxy_inventaire.setZValue(1000)
-        self.proxy_inventaire.setPos(self.width() - LARGEUR_INVENTAIRE, 0)
+        self.proxy_inventaire.setPos(self.width() - config.LARGEUR_INVENTAIRE, 0)
 
         self.app.view.wheelEvent = self._wheel_event_filtre
 
@@ -362,7 +309,7 @@ class Aquarium(QGraphicsScene):
         niveau = self._drag_poisson_niveau
         self._drag_poisson_niveau = None
 
-        if pos.x() < self.width() - LARGEUR_INVENTAIRE:
+        if pos.x() < self.width() - config.LARGEUR_INVENTAIRE:
             self.sortir_de_inventaire(niveau, self.proxy_inventaire.widget().quantite_sortie, pos)
 
     def _repositionner_poissons(self, market: bool = False, inventaire: bool = False):
@@ -379,12 +326,12 @@ class Aquarium(QGraphicsScene):
                 y = poisson.pos().y()
                 larg = poisson.poisson.width()
 
-                if market and x < LARGEUR_MARKET:
-                    x = LARGEUR_MARKET + larg // 2
+                if market and x < config.LARGEUR_MARKET:
+                    x = config.LARGEUR_MARKET + larg // 2
                     poisson.setPos(QPointF(x, y))
 
-                if inventaire and x > self.width() - LARGEUR_INVENTAIRE - larg:
-                    x = self.width() - LARGEUR_INVENTAIRE - larg - 25
+                if inventaire and x > self.width() - config.LARGEUR_INVENTAIRE - larg:
+                    x = self.width() - config.LARGEUR_INVENTAIRE - larg - 25
                     poisson.setPos(QPointF(x, y))
 
                 # Relancer une animation avec les nouvelles limites
@@ -394,24 +341,20 @@ class Aquarium(QGraphicsScene):
                 )
 
     def update_market(self):
-        global LARGEUR_MARKET
-
         if self.proxy_market:
             if int(self.width()) >= 1000:
-                LARGEUR_MARKET = 350
+                config.LARGEUR_MARKET = 350
             else:
-                LARGEUR_MARKET = int(self.width()) // 3
+                config.LARGEUR_MARKET = int(self.width()) // 3
             self.proxy_market.widget().setFixedHeight(int(self.height()))
-            self.proxy_market.widget().setFixedWidth(LARGEUR_MARKET)
+            self.proxy_market.widget().setFixedWidth(config.LARGEUR_MARKET)
             self.proxy_market.setPos(0, 0)
 
     def update_inventaire(self):
-        global LARGEUR_INVENTAIRE
-
         if self.proxy_inventaire is not None:
             self.proxy_inventaire.widget().setFixedHeight(int(self.height()))
-            self.proxy_inventaire.widget().setFixedWidth(LARGEUR_INVENTAIRE)
-            self.proxy_inventaire.setPos(self.width() - LARGEUR_INVENTAIRE, 0)
+            self.proxy_inventaire.widget().setFixedWidth(config.LARGEUR_INVENTAIRE)
+            self.proxy_inventaire.setPos(self.width() - config.LARGEUR_INVENTAIRE, 0)
 
     def tout_mettre_en_inventaire(self):
         """Met tous les poissons de l'eau dans l'inventaire."""
@@ -461,7 +404,7 @@ class Aquarium(QGraphicsScene):
                 font.setPointSize(36)
                 font.setBold(True)
                 self._icone_drop_item.setFont(font)
-                x = self.width() - LARGEUR_INVENTAIRE + LARGEUR_INVENTAIRE / 2 - 20
+                x = self.width() - config.LARGEUR_INVENTAIRE + config.LARGEUR_INVENTAIRE / 2 - 20
                 y = self.height() / 2 - 30
                 self._icone_drop_item.setPos(x, y)
         else:
@@ -874,281 +817,3 @@ class Aquarium(QGraphicsScene):
             animation_sparkles.anim.finished.connect(nettoyer)
             self.sparkles.append(animation_sparkles)  # garder en mémoire
             animation_sparkles.play()
-
-
-# ===================================================
-# Bulle
-# ===================================================
-class Bulles(QGraphicsPixmapItem):
-    """Bulle graphique dans l'aquarium."""
-
-    def __init__(self):
-        super().__init__()
-
-        chemin_bulle = IMG_DIR / "fsdfgS" / "Bubble.png"
-        bulle = QPixmap(str(chemin_bulle))
-
-        self.setPixmap(bulle)
-        self.setTransformOriginPoint(bulle.width() / 2, bulle.height() / 2)
-        self.setScale(0.1)
-
-
-# ===================================================
-# Étoile
-# ===================================================
-class Etoile(QGraphicsPixmapItem):
-    """Étoile graphique dans l'aquarium."""
-
-    def __init__(self, chemin):
-        super().__init__()
-
-        scale = random.randint(5, 25)
-
-        etoile = QPixmap(str(chemin))
-
-        self.setPixmap(etoile.scaled(
-            scale,
-            scale,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation
-        ))
-        self.setTransformOriginPoint(etoile.width() / 2, etoile.height() / 2)
-
-
-# ===================================================
-# Poisson interactif
-# ===================================================
-class Poisson(QGraphicsPixmapItem):
-    """Poisson interactif dans l'aquarium."""
-
-    def __init__(self, niveau: int = 0, position: QPointF = None):
-        super().__init__()
-
-        self.animation_actuelle = None
-        self._anim_rot_debut = None
-        self._anim_rot_fin = None
-        self._anim_scale = None
-
-        self.aquarium = None
-        self.n = niveau
-
-        self.pris = False
-        self.offset = QPointF(0, 0)
-
-        self.regarde_gauche = False
-        self._glow_item = None  # item séparé pour la lumière
-
-        self.setFlag(QGraphicsPixmapItem.GraphicsItemFlag.ItemIsMovable)
-
-        chemin_poisson = PIXEL_ART_DIR / f"{EVOLUTION_POISSON[self.n]}.png"
-        self.poisson = QPixmap(str(chemin_poisson)).scaled(
-            100, 100,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation
-        )
-
-        self._pixmap_droite = self.poisson.copy()
-        self._pixmap_gauche = self._pixmap_droite.transformed(QTransform().scale(-1, 1))
-
-        self.setPixmap(self.poisson)
-
-        self.setTransformOriginPoint(self.poisson.width() / 2, self.poisson.height() / 2)
-
-        if self.n in (50, 51):  # poisson_lumiere et poisson_lumiere2
-            self._creer_glow()
-
-        if self.n == 24:
-            glow = QGraphicsDropShadowEffect()
-            glow.setBlurRadius(40)
-            glow.setOffset(0, 0)  # centré sur le poisson
-            glow.setColor(QColor(180, 0, 255))
-            self.setGraphicsEffect(glow)
-
-        if position:
-            self.setPos(position)
-        else:
-            self.setPos(QPointF(250, 200))
-
-    def _creer_glow(self):
-        from PySide6.QtWidgets import QGraphicsEllipseItem
-        from PySide6.QtGui import QRadialGradient, QBrush
-
-        couleur = QColor(0, 200, 255) if self.n == 50 else QColor(255, 140, 0)
-
-        # Cercle lumineux
-        self._glow_item = QGraphicsEllipseItem(-20, -20, 40, 40, self)  # ← enfant du poisson
-
-        # Dégradé radial : brillant au centre, transparent au bord
-        gradient = QRadialGradient(0, 0, 20)
-        gradient.setColorAt(0.0, QColor(couleur.red(), couleur.green(), couleur.blue(), 220))
-        gradient.setColorAt(0.5, QColor(couleur.red(), couleur.green(), couleur.blue(), 80))
-        gradient.setColorAt(1.0, QColor(couleur.red(), couleur.green(), couleur.blue(), 0))
-
-        self._glow_item.setBrush(QBrush(gradient))
-        self._glow_item.setPen(Qt.PenStyle.NoPen)
-        self._glow_item.setZValue(5)
-
-        # Positionner la boule lumineuse sur l'antenne du poisson
-        if self.n == 50:
-            self._glow_item.setPos(self.poisson.width() * 0.82, self.poisson.height() * 0.32)
-        else:
-            self._glow_item.setPos(self.poisson.width() * 0.92, self.poisson.height() * 0.25)
-
-        # Ajouter un effet glow sur le cercle seulement
-        glow = QGraphicsDropShadowEffect()
-        glow.setBlurRadius(30)
-        glow.setOffset(0, 0)
-        glow.setColor(couleur)
-        self._glow_item.setGraphicsEffect(glow)
-
-    def appliquer_direction(self, vers_gauche: bool):
-        """Change la direction du poisson via un flip horizontal."""
-        if vers_gauche == self.regarde_gauche:
-            return
-
-        self.regarde_gauche = vers_gauche
-
-        if vers_gauche:
-            self.poisson = self._pixmap_gauche
-            if self.n == 50:
-                self._glow_item.setPos(self.poisson.width() * 0.18, self.poisson.height() * 0.32)
-            if self.n == 51:
-                self._glow_item.setPos(self.poisson.width() * 0.08, self.poisson.height() * 0.25)
-        else:
-            self.poisson = self._pixmap_droite
-            if self.n == 50:
-                self._glow_item.setPos(self.poisson.width() * 0.82, self.poisson.height() * 0.32)
-            if self.n == 51:
-                self._glow_item.setPos(self.poisson.width() * 0.92, self.poisson.height() * 0.25)
-
-        self.setPixmap(self.poisson)
-        self.setTransformOriginPoint(self.poisson.width() / 2, self.poisson.height() / 2)
-
-    def verifier_collisions(self):
-        """Vérifie les collisions avec d'autres poissons pour la fusion."""
-        collisions = self.collidingItems()
-        for item in collisions:
-            if isinstance(item, Poisson) and item != self:
-                if self.n == item.n and self.aquarium:
-                    self.aquarium.fusionner_poissons(self, item)
-                    break
-
-    def mousePressEvent(self, event):
-        """Gère le clic sur le poisson (début du drag)."""
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.pris = True
-            self.offset = event.pos()
-
-            if self.animation_actuelle:
-                self.animation_actuelle.stop()
-
-            self.setRotation(0)
-
-            self._anim_scale = AnimationScale.grab(self)
-            self._anim_scale.play()
-
-        super().mousePressEvent(event)
-
-    def mouseMoveEvent(self, event):
-        """Déplace le poisson en suivant la souris."""
-        if self.pris:
-            new_pos = event.pos() - self.offset + self.pos()
-            larg = self.poisson.width()
-            haut = self.poisson.height()
-
-            # Si l'inventaire est ouvert, on permet d'aller dans sa zone pour le drop
-            if self.aquarium and self.aquarium.proxy_inventaire:
-                # Clamping sans limite droite → le poisson peut entrer dans l'inventaire
-                x = max(MARGE, int(new_pos.x()))
-                y = max(MARGE, min(int(new_pos.y()), self.aquarium.height() - haut))
-
-                # Effet visuel quand on survole l'inventaire
-                dans_zone = new_pos.x() + larg > self.aquarium.width() - LARGEUR_INVENTAIRE
-                self.aquarium.proxy_inventaire.setOpacity(0.5 if dans_zone else 1.0)
-                self.aquarium.afficher_icone_drop(dans_zone)
-            else:
-                x, y = clamper_position(new_pos.x(), new_pos.y(), larg, haut, self)
-
-            self.setPos(QPointF(x, y))
-
-    def mouseReleaseEvent(self, event):
-        """Gère le relâchement du clic (fin du drag)."""
-        if event.button() == Qt.MouseButton.LeftButton:
-
-            # Remettre l'inventaire normal
-            if self.aquarium and self.aquarium.proxy_inventaire:
-                self.aquarium.proxy_inventaire.setOpacity(1.0)
-                self.aquarium.afficher_icone_drop(False)
-
-            larg = self.poisson.width()
-
-            # Lâché sur l'inventaire ?
-            if (self.aquarium and self.aquarium.proxy_inventaire and
-                    self.pos().x() + larg > self.aquarium.width() - LARGEUR_INVENTAIRE):
-                self.aquarium.mettre_en_inventaire(self)
-                return  # ← le poisson est supprimé, on arrête là
-
-            # Sinon comportement normal — reclamper au cas où
-            larg = self.poisson.width()
-            haut = self.poisson.height()
-            x, y = clamper_position(self.pos().x(), self.pos().y(), larg, haut, self)
-            self.setPos(QPointF(x, y))
-
-            self.verifier_collisions()
-            self.pris = False
-
-            self._anim_scale = AnimationScale.release(self)
-            self._anim_scale.play()
-
-            if self.aquarium:
-                QTimer.singleShot(random.randint(500, 2000),
-                                  lambda: self.aquarium.lancer_animation_aleatoire(self))
-
-        super().mouseReleaseEvent(event)
-
-
-class PixmapCliquable(QGraphicsPixmapItem):
-    def __init__(self, chemin_image, x, y, scale=100, callback=None):
-        super().__init__()
-        # Charger l'image
-        self.scale = scale
-        self.pos = QPointF(x, y)
-        self.chemin_image = chemin_image
-        self.pixmap = QPixmap(self.chemin_image).scaled(
-            self.scale,
-            self.scale,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation)
-        self.setPixmap(self.pixmap)
-        self.setPos(self.pos)
-        self.setAcceptHoverEvents(True)  # ← IMPORTANT !
-        self.callback = callback
-
-    def mousePressEvent(self, event):
-        self.pixmap = self.pixmap.scaled(
-            int(self.scale * 0.95),
-            int(self.scale * 0.95),
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation
-        )
-        self.setPos(self.pos + QPointF(self.scale * 0.025, self.scale * 0.025))
-        self.setPixmap(self.pixmap)
-
-        if self.callback:
-            self.callback()  # Appeler la fonction au clic
-
-    def mouseReleaseEvent(self, event):
-        self.pixmap = QPixmap(self.chemin_image).scaled(
-            self.scale,
-            self.scale,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.SmoothTransformation
-        )
-        self.setPos(self.pos)
-        self.setPixmap(self.pixmap)
-
-    def hoverEnterEvent(self, event):
-        self.setOpacity(0.7)  # Assombrir au survol
-
-    def hoverLeaveEvent(self, event):
-        self.setOpacity(1)   # Remet normal quand on ne survol plus
