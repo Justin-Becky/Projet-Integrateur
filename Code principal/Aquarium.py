@@ -5,8 +5,8 @@ from pathlib import Path
 from PySide6 import QtWidgets
 from PySide6.QtCore import QPointF, QRectF, Qt, QEasingCurve, QTimer
 from PySide6.QtWidgets import (QGraphicsScene, QGraphicsPixmapItem, QGraphicsView, QWidget,
-                               QVBoxLayout, QLabel)
-from PySide6.QtGui import QPixmap, QColorConstants, QLinearGradient, QTransform
+                               QVBoxLayout, QLabel, QGraphicsColorizeEffect, QGraphicsDropShadowEffect)
+from PySide6.QtGui import QPixmap, QColorConstants, QLinearGradient, QTransform, QColor
 from Animations import AnimationBulle, AnimationPosition, AnimationRotation, AnimationScale
 from market import Market
 from inventaire import Inventaire
@@ -39,7 +39,7 @@ MARGE = 0
 MOULA = 10000
 # --- Multiplicateur de vitesse des animations ---
 # Plus la valeur est grande, plus les animations sont lentes
-FACTEUR_LENTEUR = 0.1
+FACTEUR_LENTEUR = 1
 
 # Constante pour la largeur du market
 LARGEUR_MARKET = 500
@@ -59,7 +59,7 @@ def clamper_position(x, y, largeur_poisson, hauteur_poisson, poisson):
         y = max(int(poisson.aquarium.height()) - 160 + 2 * hauteur_poisson // 3, min(
             y, poisson.aquarium.height() - 2 * hauteur_poisson // 3))
     else:
-        # Décaler la limite gauche si le market est ouvert
+        # Décaler la limite gauche si le market est ouvert et décalé la limite de droite si l'inventaire est ouvert.
         x = max(limite_gauche, min(x, limite_droite))
         y = max(MARGE + 2 * hauteur_poisson // 3, min(y, poisson.aquarium.height() - 175))
     return x, y
@@ -129,9 +129,7 @@ class AquariumWidget(QWidget):
 
     def keyPressEvent(self, event, /):
         if event.key() == Qt.Key.Key_N:
-            if self.n <= 10:
-                self.scene.creer_poisson(niveau=22)
-                self.scene.creer_poisson(niveau=23)
+
             self.scene.creer_poisson(niveau=self.n)
             self.n = (self.n + 1) % (len(EVOLUTION_POISSON) - 1)
             self.scene.nb += 1
@@ -152,6 +150,9 @@ class Aquarium(QGraphicsScene):
 
     def __init__(self, application):
         super().__init__()
+        self.est_nuit = False
+        self.sparkles = []
+        self.animation_fusion_lst = []
         self._original_mouse_release = None
         self._original_mouse_move = None
         self._icone_drop_item = None
@@ -173,6 +174,11 @@ class Aquarium(QGraphicsScene):
         gradient.setColorAt(0.5, QColorConstants.DarkCyan)
         gradient.setColorAt(1, QColorConstants.DarkBlue)
         self.setBackgroundBrush(gradient)
+
+        # alterner entre le mode nuit et le mode jour à chaque 30 minutes
+        self.timer_jour_nuit = QTimer()
+        self.timer_jour_nuit.timeout.connect(self._basculer_jour_nuit)
+        self.timer_jour_nuit.start(30 * 60 * 1000)  # 30 minutes en ms
         # </editor-fold>
 
         # --- Le sol en sable ---
@@ -192,6 +198,10 @@ class Aquarium(QGraphicsScene):
         self.update_inventaire_icon()
         self.addItem(self.bouton_market)
         # </editor-fold>
+
+    def _basculer_jour_nuit(self):
+        self.est_nuit = not self.est_nuit
+        self.update_background()
 
     def _wheel_event_filtre(self, event):
         pos_scene = self.app.view.mapToScene(event.position().toPoint())
@@ -251,35 +261,46 @@ class Aquarium(QGraphicsScene):
         self.supprimer_poisson(poisson)
         self.refresh_inventaire_ui()
 
-    def sortir_de_inventaire(self, niveau):
+    def sortir_de_inventaire(self, niveau, nb, pos, collision: bool = True):
         """Remet un poisson de l'inventaire dans l'eau."""
         if niveau not in self.inventaire_poissons:
             return
-        # Retirer une seule occurrence du niveau
-        self.inventaire_poissons.remove(niveau)  # ← remove enlève la première occurrence
+        if nb == -1:
+            n = self.inventaire_poissons.count(niveau)
+        else:
+            n = min(self.inventaire_poissons.count(niveau), nb)
 
-        x_min = LARGEUR_MARKET + 50 if self.proxy_market else 50
-        x_max = self.width() - LARGEUR_INVENTAIRE - 100
-        x = (x_min + x_max) / 2
-        y = self.height() / 2
-        self.creer_poisson(QPointF(x, y), niveau)
+        # Retirer n occurrence du niveau
+        for i in range(n):
+            self.inventaire_poissons.remove(niveau)  # ← enlève la première occurrence
+
+        for i in range(n):
+            self.creer_poisson(pos, niveau)
+            if self.poissons:
+                dernier = self.poissons[-1]
+                dernier.setPos(pos.x() - dernier.pixmap().width() / 2, pos.y() - dernier.pixmap().height() / 2)
+                if i == 0:
+                    if collision:
+                        dernier.verifier_collisions()
+                delai = random.randint(500, 2000)
+                QTimer.singleShot(delai, lambda: self.lancer_animation_aleatoire(dernier))
+
         self.refresh_inventaire_ui()
 
     def refresh_inventaire_ui(self):
-        """Recrée le widget inventaire pour refléter l'état actuel."""
         if self.proxy_inventaire is None:
             return
-        pos = self.proxy_inventaire.pos()
-        taille = self.proxy_inventaire.widget().size()
-        self.removeItem(self.proxy_inventaire)
 
-        inventaire = Inventaire(self, self.inventaire_poissons, EVOLUTION_POISSON)
-        inventaire.setFixedSize(taille)
-        inventaire.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
-        inventaire.setAutoFillBackground(False)
-        self.proxy_inventaire = self.addWidget(inventaire)
-        self.proxy_inventaire.setZValue(1000)
-        self.proxy_inventaire.setPos(pos)
+        compteur = {}
+        for niveau in self.inventaire_poissons:
+            compteur[niveau] = compteur.get(niveau, 0) + 1
+
+        widget_inventaire = self.proxy_inventaire.widget()
+
+        # Mettre à jour les slots existants ET créer les nouveaux
+        tous_les_niveaux = set(widget_inventaire.slots.keys()) | set(compteur.keys())
+        for niveau in tous_les_niveaux:
+            widget_inventaire.mettre_a_jour_slot(niveau, compteur.get(niveau, 0))
 
     def inventaire_clicked(self):
         if self.proxy_inventaire is not None:
@@ -342,13 +363,7 @@ class Aquarium(QGraphicsScene):
         self._drag_poisson_niveau = None
 
         if pos.x() < self.width() - LARGEUR_INVENTAIRE:
-            self.sortir_de_inventaire(niveau)
-            if self.poissons:
-                dernier = self.poissons[-1]
-                dernier.setPos(pos.x() - dernier.pixmap().width() / 2, pos.y() - dernier.pixmap().height() / 2)
-                dernier.verifier_collisions()
-                delai = random.randint(500, 2000)
-                QTimer.singleShot(delai, lambda: self.lancer_animation_aleatoire(dernier))
+            self.sortir_de_inventaire(niveau, self.proxy_inventaire.widget().quantite_sortie, pos)
 
     def _repositionner_poissons(self, market: bool = False, inventaire: bool = False):
         """Arrête les animations et repositionne les poissons hors de la zone du market."""
@@ -407,6 +422,23 @@ class Aquarium(QGraphicsScene):
             self.supprimer_poisson(poisson)
         self.refresh_inventaire_ui()
 
+    def tout_sortir_inventaire(self):
+        x = self.width() // 2
+        y = self.height() // 2
+        pos = QPointF(x, y)
+
+        niveaux = list(self.inventaire_poissons)
+
+        for i, n in enumerate(niveaux):
+            if len(niveaux) < 50:
+                i *= 2
+
+            QTimer.singleShot(
+                i * 40,
+                lambda niveau=n: self.sortir_de_inventaire(niveau, 1, pos, collision=False)
+                if niveau in self.inventaire_poissons else None
+            )
+
     def update_inventaire_icon(self):
         if self.bouton_inventaire is not None:
             self.removeItem(self.bouton_inventaire)
@@ -458,12 +490,50 @@ class Aquarium(QGraphicsScene):
             self.floors.append(floor)
 
     def update_background(self):
-        """Redessine le dégradé du fond."""
-        gradient = QLinearGradient(0, 0, 0, self.height())
-        gradient.setColorAt(0, QColorConstants.Cyan)
-        gradient.setColorAt(0.5, QColorConstants.DarkCyan)
-        gradient.setColorAt(1, QColorConstants.DarkBlue)
-        self.setBackgroundBrush(gradient)
+        """
+        Redessine le dégradé du fond.
+        soit en mode jour.
+        soit en mode nuit.
+        """
+        if self.est_nuit:
+            gradient = QLinearGradient(0, 0, 0, self.height())
+            gradient.setColorAt(0, QColor(30, 25, 90))
+            gradient.setColorAt(0.5, QColor(20, 15, 70))
+            gradient.setColorAt(1, QColor(10, 5, 50))
+            self.setBackgroundBrush(gradient)
+        else:
+            gradient = QLinearGradient(0, 0, 0, self.height())
+            gradient.setColorAt(0, QColorConstants.Cyan)
+            gradient.setColorAt(0.5, QColorConstants.DarkCyan)
+            gradient.setColorAt(1, QColorConstants.DarkBlue)
+            self.setBackgroundBrush(gradient)
+
+            self._appliquer_mode_nuit()
+
+    def _appliquer_mode_nuit(self):
+        # Assombrir les poissons
+        for poisson in self.poissons:
+            # Ne pas écraser le glow des poissons lumineux
+            if poisson.n == 24:
+                continue
+
+            if self.est_nuit:
+                effet = QGraphicsColorizeEffect()
+                effet.setColor(QColor(30, 20, 80))  # teinte violette
+                effet.setStrength(0.4)  # 0.0 = aucun effet, 1.0 = full
+                poisson.setGraphicsEffect(effet)
+            else:
+                poisson.setGraphicsEffect(None)
+
+        # Assombrir le sable
+        for floor in self.floors:
+            if self.est_nuit:
+                effet = QGraphicsColorizeEffect()
+                effet.setColor(QColor(30, 20, 80))
+                effet.setStrength(0.5)
+                floor.setGraphicsEffect(effet)
+            else:
+                floor.setGraphicsEffect(None)
 
     def clipper_poissons_au_resize(self):
         """
@@ -489,19 +559,19 @@ class Aquarium(QGraphicsScene):
         if niveau > 55:
             return
 
-        if pos is None:
-            x_min = LARGEUR_MARKET + 50\
-                if self.proxy_market else 50
-            x_max = int(self.width()) - LARGEUR_INVENTAIRE - 100 if self.proxy_inventaire else int(self.width() - 50)
-            x = random.randint(x_min, x_max)
-            y = random.randint(50, int(self.height() - 150))
-            pos = QPointF(x, y)
-
         poisson = Poisson(niveau, pos)
         poisson.aquarium = self
+
+        if pos is None:
+            x = random.randint(0, int(self.width()))
+            y = random.randint(0, int(self.height()))
+            x, y = clamper_position(x, y, poisson.poisson.width(), poisson.poisson.height(), poisson)
+            poisson.setPos(QPointF(x, y))
+
         poisson.setZValue(-1)
         self.addItem(poisson)
         self.poissons.append(poisson)
+        self._appliquer_mode_nuit()
 
         delai = random.randint(500, 2000)
         QTimer.singleShot(delai, lambda: self.lancer_animation_aleatoire(poisson))
@@ -725,21 +795,85 @@ class Aquarium(QGraphicsScene):
     # ──────────────────────────────────────────────
 
     def fusionner_poissons(self, poisson1, poisson2):
-        """Fusionne deux poissons de même niveau."""
         if poisson1.n != poisson2.n:
             return
         if poisson1.n >= len(EVOLUTION_POISSON) - 1:
             return
 
+        # Bloquer toute re-fusion pendant l'animation
+        poisson1.pris = True
+        poisson2.pris = True
+
+        if poisson1.animation_actuelle:
+            poisson1.animation_actuelle.stop()
+        if poisson2.animation_actuelle:
+            poisson2.animation_actuelle.stop()
+
+        self.supprimer_poisson(poisson1)
+
         pos_x = (poisson1.pos().x() + poisson2.pos().x()) / 2
         pos_y = (poisson1.pos().y() + poisson2.pos().y()) / 2
         nouvelle_position = QPointF(pos_x, pos_y)
 
-        self.supprimer_poisson(poisson1)
-        self.supprimer_poisson(poisson2)
+        animation_poisson_2 = AnimationScale.fusion(poisson2)
+        self.animation_fusion_lst.append(animation_poisson_2)
 
-        nouveau_poisson = self.creer_poisson(nouvelle_position, poisson1.n + 1)
-        return nouveau_poisson
+        def apres_fusion():
+            # Supprimer après la fin de l'animation
+            self.supprimer_poisson(poisson2)
+
+            if animation_poisson_2 in self.animation_fusion_lst:
+                self.animation_fusion_lst.remove(animation_poisson_2)
+
+            nouveau_poisson = self.creer_poisson(nouvelle_position, poisson1.n + 1)
+            if nouveau_poisson:
+                larg = nouveau_poisson.poisson.width()
+                haut = nouveau_poisson.poisson.height()
+                nouveau_poisson.setPos(QPointF(
+                    nouvelle_position.x(),
+                    nouvelle_position.y()
+                ))
+
+                animation_nouveau = AnimationScale.fusion_after(nouveau_poisson)
+                self.animation_fusion_lst.append(animation_nouveau)
+                animation_nouveau.anim.finished.connect(
+                    lambda: self.animation_fusion_lst.remove(animation_nouveau)
+                    if animation_nouveau in self.animation_fusion_lst else None
+                )
+                animation_nouveau.play()
+
+                self.animation_sparkles(QPointF(
+                    nouveau_poisson.pos().x() + larg / 2,
+                    nouveau_poisson.pos().y() + haut / 2
+                ))
+
+        animation_poisson_2.anim.finished.connect(apres_fusion)
+        animation_poisson_2.play()
+
+    def animation_sparkles(self, pos_depart):
+        for i in range(50):
+            chemin = random.choice([IMG_DIR / "etoile_blanche.png", IMG_DIR / "etoile_bleu.png"])
+            pix = Etoile(chemin)
+            pix.setPos(pos_depart)  # position de départ
+            self.addItem(pix)  # ajouter à la scène
+
+            x_fin = pos_depart.x() + random.uniform(-60, 60)
+            y_fin = pos_depart.y() + random.uniform(-60, 60)
+            pos_fin = QPointF(x_fin, y_fin)
+
+            animation_sparkles = AnimationPosition(pix, pos_depart, pos_fin, 500, QEasingCurve.Type.OutCubic)
+            self.sparkles.append(animation_sparkles)
+
+            # Nettoyer l'étoile et libérer l'animation_sparkles quand c'est fini
+            def nettoyer(p=pix, a=animation_sparkles):
+                if p.scene():
+                    self.removeItem(p)
+                if a in self.sparkles:
+                    self.sparkles.remove(a)
+
+            animation_sparkles.anim.finished.connect(nettoyer)
+            self.sparkles.append(animation_sparkles)  # garder en mémoire
+            animation_sparkles.play()
 
 
 # ===================================================
@@ -757,6 +891,28 @@ class Bulles(QGraphicsPixmapItem):
         self.setPixmap(bulle)
         self.setTransformOriginPoint(bulle.width() / 2, bulle.height() / 2)
         self.setScale(0.1)
+
+
+# ===================================================
+# Étoile
+# ===================================================
+class Etoile(QGraphicsPixmapItem):
+    """Étoile graphique dans l'aquarium."""
+
+    def __init__(self, chemin):
+        super().__init__()
+
+        scale = random.randint(5, 25)
+
+        etoile = QPixmap(str(chemin))
+
+        self.setPixmap(etoile.scaled(
+            scale,
+            scale,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        ))
+        self.setTransformOriginPoint(etoile.width() / 2, etoile.height() / 2)
 
 
 # ===================================================
@@ -780,6 +936,7 @@ class Poisson(QGraphicsPixmapItem):
         self.offset = QPointF(0, 0)
 
         self.regarde_gauche = False
+        self._glow_item = None  # item séparé pour la lumière
 
         self.setFlag(QGraphicsPixmapItem.GraphicsItemFlag.ItemIsMovable)
 
@@ -794,12 +951,55 @@ class Poisson(QGraphicsPixmapItem):
         self._pixmap_gauche = self._pixmap_droite.transformed(QTransform().scale(-1, 1))
 
         self.setPixmap(self.poisson)
+
         self.setTransformOriginPoint(self.poisson.width() / 2, self.poisson.height() / 2)
+
+        if self.n in (50, 51):  # poisson_lumiere et poisson_lumiere2
+            self._creer_glow()
+
+        if self.n == 24:
+            glow = QGraphicsDropShadowEffect()
+            glow.setBlurRadius(40)
+            glow.setOffset(0, 0)  # centré sur le poisson
+            glow.setColor(QColor(180, 0, 255))
+            self.setGraphicsEffect(glow)
 
         if position:
             self.setPos(position)
         else:
             self.setPos(QPointF(250, 200))
+
+    def _creer_glow(self):
+        from PySide6.QtWidgets import QGraphicsEllipseItem
+        from PySide6.QtGui import QRadialGradient, QBrush
+
+        couleur = QColor(0, 200, 255) if self.n == 50 else QColor(255, 140, 0)
+
+        # Cercle lumineux
+        self._glow_item = QGraphicsEllipseItem(-20, -20, 40, 40, self)  # ← enfant du poisson
+
+        # Dégradé radial : brillant au centre, transparent au bord
+        gradient = QRadialGradient(0, 0, 20)
+        gradient.setColorAt(0.0, QColor(couleur.red(), couleur.green(), couleur.blue(), 220))
+        gradient.setColorAt(0.5, QColor(couleur.red(), couleur.green(), couleur.blue(), 80))
+        gradient.setColorAt(1.0, QColor(couleur.red(), couleur.green(), couleur.blue(), 0))
+
+        self._glow_item.setBrush(QBrush(gradient))
+        self._glow_item.setPen(Qt.PenStyle.NoPen)
+        self._glow_item.setZValue(5)
+
+        # Positionner la boule lumineuse sur l'antenne du poisson
+        if self.n == 50:
+            self._glow_item.setPos(self.poisson.width() * 0.82, self.poisson.height() * 0.32)
+        else:
+            self._glow_item.setPos(self.poisson.width() * 0.92, self.poisson.height() * 0.25)
+
+        # Ajouter un effet glow sur le cercle seulement
+        glow = QGraphicsDropShadowEffect()
+        glow.setBlurRadius(30)
+        glow.setOffset(0, 0)
+        glow.setColor(couleur)
+        self._glow_item.setGraphicsEffect(glow)
 
     def appliquer_direction(self, vers_gauche: bool):
         """Change la direction du poisson via un flip horizontal."""
@@ -810,8 +1010,16 @@ class Poisson(QGraphicsPixmapItem):
 
         if vers_gauche:
             self.poisson = self._pixmap_gauche
+            if self.n == 50:
+                self._glow_item.setPos(self.poisson.width() * 0.18, self.poisson.height() * 0.32)
+            if self.n == 51:
+                self._glow_item.setPos(self.poisson.width() * 0.08, self.poisson.height() * 0.25)
         else:
             self.poisson = self._pixmap_droite
+            if self.n == 50:
+                self._glow_item.setPos(self.poisson.width() * 0.82, self.poisson.height() * 0.32)
+            if self.n == 51:
+                self._glow_item.setPos(self.poisson.width() * 0.92, self.poisson.height() * 0.25)
 
         self.setPixmap(self.poisson)
         self.setTransformOriginPoint(self.poisson.width() / 2, self.poisson.height() / 2)

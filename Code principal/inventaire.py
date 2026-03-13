@@ -1,9 +1,8 @@
 from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPixmap
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QScrollArea, QSizePolicy, QGridLayout
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QScrollArea, QSizePolicy, QGridLayout, QHBoxLayout
 from market import RoundedWidget
-from collections import Counter
 
 BASE_DIR = Path(__file__).parent
 IMG_DIR = BASE_DIR / "../Images"
@@ -49,6 +48,60 @@ class Inventaire(QWidget):
         btn_fermer.mousePressEvent = lambda e: self.aquarium.fermer_inventaire()
         conteneur_layout.addWidget(btn_fermer)
 
+        # ── Sélecteur de quantité ──
+        self.quantite_sortie = 1  # valeur par défaut
+
+        selecteur_layout = QHBoxLayout()
+        selecteur_layout.setContentsMargins(8, 0, 8, 4)
+        selecteur_layout.setSpacing(4)
+
+        style_btn_inactif = """
+            QLabel {
+                color: #006482;
+                font-size: 11px;
+                font-weight: bold;
+                background: rgba(255,255,255,0.1);
+                border-radius: 6px;
+                padding: 2px;
+            }
+            QLabel:hover { background: rgba(255,255,255,0.25); color: white; }
+        """
+        style_btn_actif = """
+            QLabel {
+                color: white;
+                font-size: 11px;
+                font-weight: bold;
+                background: #006482;
+                border-radius: 6px;
+                padding: 2px;
+            }
+        """
+
+        self.btn_1 = QLabel("×1")
+        self.btn_5 = QLabel("×5")
+        self.btn_tous = QLabel("tous")
+
+        for btn in [self.btn_1, self.btn_5, self.btn_tous]:
+            btn.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            btn.setFixedHeight(24)
+            btn.setStyleSheet(style_btn_inactif)
+            selecteur_layout.addWidget(btn)
+
+        # Activer ×1 par défaut
+        self.btn_1.setStyleSheet(style_btn_actif)
+
+        def selectionner(valeur, btn_actif):
+            self.quantite_sortie = valeur
+            for b in [self.btn_1, self.btn_5, self.btn_tous]:
+                b.setStyleSheet(style_btn_inactif)
+            btn_actif.setStyleSheet(style_btn_actif)
+
+        self.btn_1.mousePressEvent = lambda e: selectionner(1, self.btn_1)
+        self.btn_5.mousePressEvent = lambda e: selectionner(5, self.btn_5)
+        self.btn_tous.mousePressEvent = lambda e: selectionner(-1, self.btn_tous)  # -1 = tous
+
+        conteneur_layout.addLayout(selecteur_layout)
+
         # ── Bouton "Tout ranger" ──
         btn_tout_ranger = QLabel("⬇ Tout ranger")
         btn_tout_ranger.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -66,6 +119,24 @@ class Inventaire(QWidget):
         """)
         btn_tout_ranger.mousePressEvent = lambda e: self.aquarium.tout_mettre_en_inventaire()
         conteneur_layout.addWidget(btn_tout_ranger)
+
+        # ── Bouton "Tout sortir" ──
+        btn_tout_sortir = QLabel("⬆ Tout sortir")
+        btn_tout_sortir.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        btn_tout_sortir.setFixedHeight(35)
+        btn_tout_sortir.setStyleSheet("""
+            QLabel {
+                color: #006482;
+                font-size: 11px;
+                font-weight: bold;
+                background: rgba(255,255,255,0.1);
+                border-radius: 6px;
+                margin: 0px 8px 4px 8px;
+            }
+            QLabel:hover { background: rgba(255,255,255,0.25); color: white; }
+        """)
+        btn_tout_sortir.mousePressEvent = lambda e: self.aquarium.tout_sortir_inventaire()
+        conteneur_layout.addWidget(btn_tout_sortir)
 
         # ── ScrollArea à l'intérieur du RoundedWidget ──
         scroll = QScrollArea()
@@ -100,35 +171,66 @@ class Inventaire(QWidget):
         self.contenu_layout.setSpacing(8)
         self.contenu_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
-        grille = QGridLayout()
-        grille.setSpacing(6)
+        self.grille = QGridLayout()
+        self.grille.setSpacing(6)
 
-        compteur = Counter(self.poissons_int_lst)
+        # dictionnaire ordonné pour préserver l'ordre d'apparition dans l'inventaire
+        compteur = {}
+        for niveau in self.poissons_int_lst:
+            compteur[niveau] = compteur.get(niveau, 0) + 1
+
+        self.slots = {}  # niveau → SlotPoisson
 
         for i, (niveau, quantite) in enumerate(compteur.items()):
             nom = self.poisson_lst[niveau]
-            slot = SlotPoisson(aquarium, niveau, nom)  # ← passer niveau au lieu de i
+            slot = SlotPoisson(aquarium, niveau, nom, quantite)
+            self.grille.addWidget(slot, i, 0)
+            self.slots[niveau] = slot
 
-            badge = QLabel(f"×{quantite}", slot)
-            badge.setStyleSheet("""
-                background: rgba(0,0,0,0.6);
-                color: white;
-                font-size: 9px;
-                border-radius: 4px;
-                padding: 1px 3px;
-            """)
-            badge.adjustSize()
-            badge.move(slot.width() - badge.width() - 2, 2)
+            self.grille.addWidget(slot, i, 0)
 
-            grille.addWidget(slot, i, 0)
-
-        self.contenu_layout.addLayout(grille)
+        self.contenu_layout.addLayout(self.grille)
 
         scroll.setWidget(contenu)
 
         conteneur_layout.addWidget(scroll)
 
         main_layout.addWidget(conteneur)
+
+    def mettre_a_jour_slot(self, niveau, nouvelle_quantite):
+        slot = self.slots.get(niveau)
+        if slot is None:
+            if nouvelle_quantite > 0:
+                self.ajouter_slot(niveau, nouvelle_quantite)
+            return
+        slot.quantite = nouvelle_quantite
+        slot.badge.setText(f"×{nouvelle_quantite}")
+        slot.badge.setVisible(nouvelle_quantite > 1)
+        slot.repositionner_badge()
+        slot.setEnabled(nouvelle_quantite > 0)
+        slot.setStyleSheet("""
+            QLabel {
+                background: rgba(255,255,255,0.05);
+                border-radius: 8px;
+                border: 1px solid rgba(255,255,255,0.1);
+            }
+        """ if nouvelle_quantite == 0 else """
+            QLabel {
+                background: rgba(255,255,255,0.1);
+                border-radius: 8px;
+                border: 1px solid rgba(255,255,255,0.2);
+            }
+            QLabel:hover { background: rgba(255,255,255,0.25); }
+        """)
+
+    def ajouter_slot(self, niveau, quantite):
+        """Crée et ajoute un nouveau slot pour un niveau qui n'existait pas encore."""
+        nom = self.poisson_lst[niveau]
+        slot = SlotPoisson(self.aquarium, niveau, nom, quantite)
+        ligne = len(self.slots)
+        self.grille.addWidget(slot, ligne, 0)
+        self.slots[niveau] = slot
+        slot.show()
 
     def creer_sections_inventaire(self, poisson):
         layout = QGridLayout()
@@ -156,11 +258,12 @@ class Inventaire(QWidget):
 
 
 class SlotPoisson(QLabel):
-    def __init__(self, aquarium, index, nom_poisson, parent=None):
+    def __init__(self, aquarium, index, nom_poisson, quantite=1, parent=None):
         super().__init__(parent)
         self.aquarium = aquarium
         self.index = index  # = niveau
         self.nom_poisson = nom_poisson
+        self.quantite = quantite
         self.setFixedSize(90, 90)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -180,8 +283,28 @@ class SlotPoisson(QLabel):
             QLabel:hover { background: rgba(255,255,255,0.25); }
         """)
 
+        # Badge quantité
+        self.badge = QLabel(f"×{self.quantite}", self)
+        self.badge.setStyleSheet("""
+            background: rgba(0,0,0,0.6);
+            color: white;
+            font-size: 9px;
+            border-radius: 4px;
+            padding: 1px 3px;
+        """)
+        self.badge.adjustSize()
+        self.badge.move(self.width() - self.badge.width() - 2, 2)
+        self.badge.setVisible(self.quantite > 1)
+
+    def repositionner_badge(self):
+        self.badge.adjustSize()
+        self.badge.move(self.width() - self.badge.width() - 2, 2)
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.repositionner_badge()
+
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
-            # Demander à l'aquarium de créer un poisson fantôme qui suit la souris
             self.aquarium.commencer_drag_inventaire(self.index, self._pixmap)
         

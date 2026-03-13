@@ -328,3 +328,27 @@ class AnimationScale(QObject):
             duration=duration,
             easing=QEasingCurve.Type.OutBounce
         )
+
+    # --- Crée une animation de fusion ---
+    @staticmethod
+    def fusion(item: QGraphicsPixmapItem, duration: int = 400):
+
+        return AnimationScale(
+            item,
+            scale_debut=item.scale(),
+            scale_fin=0.01,
+            duration=duration,
+            easing=QEasingCurve.Type.Linear
+        )
+
+    # --- Crée une animation de fusion ---
+    @staticmethod
+    def fusion_after(item: QGraphicsPixmapItem, duration: int = 400):
+
+        return AnimationScale(
+            item,
+            scale_debut=0.01,
+            scale_fin=item.scale(),
+            duration=duration,
+            easing=QEasingCurve.Type.Linear
+        )
