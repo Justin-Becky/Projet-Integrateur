@@ -307,4 +307,3 @@ class SlotPoisson(QLabel):
     def mousePressEvent(self, event):
         if event.button() == Qt.MouseButton.LeftButton:
             self.aquarium.commencer_drag_inventaire(self.index, self._pixmap)
-        

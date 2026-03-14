@@ -14,28 +14,16 @@ from PySide6.QtWidgets import QGraphicsPixmapItem
 
 
 class AnimationPosition(QObject):
-    """
-    Animation de déplacement d'un item graphique de position A à position B.
-    Utilise une interpolation linéaire (ou avec easing) entre deux QPointF.
-    """
 
-    # --- Initialise l'animation de position ---
     def __init__(self, item: QGraphicsPixmapItem, debut: QPointF, fin: QPointF,
-                 duration: int = 2000, easing: QEasingCurve.Type = QEasingCurve.Type.Linear):
-        """
-        Paramètres :
-            item     → l'élément graphique à déplacer
-            debut    → position de départ (QPointF)
-            fin      → position d'arrivée (QPointF)
-            duration → durée de l'animation en millisecondes
-            easing   → courbe d'accélération
-        """
+                 duration: int = 2000, easing: QEasingCurve.Type = QEasingCurve.Type.Linear,
+                 on_wall=None):
         super().__init__()
         self.item = item
         self.debut = QPointF(debut)
         self.fin = QPointF(fin)
+        self.on_wall = on_wall  # callback appelé si la destination est un mur
 
-        # Configuration de l'animation via QVariantAnimation (0.0 → 1.0)
         self.anim = QVariantAnimation(self)
         self.anim.setStartValue(0.0)
         self.anim.setEndValue(1.0)
@@ -43,18 +31,14 @@ class AnimationPosition(QObject):
         self.anim.setEasingCurve(QEasingCurve(easing))
         self.anim.valueChanged.connect(self._on_value)
 
-    # --- Callback appelé à chaque tick de l'animation ---
     def _on_value(self, v):
-        """Interpole la position entre debut et fin selon la progression v (0.0 à 1.0)"""
         x = self.debut.x() + (self.fin.x() - self.debut.x()) * v
         y = self.debut.y() + (self.fin.y() - self.debut.y()) * v
         self.item.setPos(QPointF(x, y))
 
-    # --- Démarre l'animation ---
     def play(self):
         self.anim.start()
 
-    # --- Arrête l'animation ---
     def stop(self):
         self.anim.stop()
 

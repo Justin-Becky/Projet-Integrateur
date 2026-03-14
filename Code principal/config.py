@@ -18,6 +18,12 @@ EVOLUTION_POISSON = [
     "pokemon_magikarp",
 ]
 
+POISSONS_TROPICAUX = [
+    0, 1, 2, 3, 4, 6, 7, 8, 10,
+    11, 12, 13, 14, 15, 16, 17, 18, 19, 20,
+    25, 26, 27, 37, 38, 39, 40, 41, 42
+]
+
 # path
 BASE_DIR = Path(__file__).parent
 IMG_DIR = BASE_DIR / "../Images"

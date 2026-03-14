@@ -12,7 +12,7 @@ from inventaire import Inventaire
 from pixmap import Poisson, Bulles, Etoile, PixmapCliquable
 from config import IMG_DIR, MOULA, FACTEUR_LENTEUR, EVOLUTION_POISSON
 import config
-from outils import clamper_position
+from outils import clamper_position, calculer_limites
 
 
 # ===================================================
@@ -40,8 +40,8 @@ class AquariumWidget(QWidget):
         # </editor-fold>
 
         # Scène
-        self.scene = Aquarium(self)
-        self.view.setScene(self.scene)
+        self.aquarium = Aquarium(self)
+        self.view.setScene(self.aquarium)
 
         self.moula_texte_label = QLabel()
         self.moula_texte_label.setText(F"{MOULA}")
@@ -59,29 +59,30 @@ class AquariumWidget(QWidget):
         h = self.view.height()
 
         # Mettre à jour la scène à la bonne taille
-        self.scene.setSceneRect(0, 0, w, h)
+        self.aquarium.setSceneRect(0, 0, w, h)
 
         # Redessiner le sol
-        self.scene.update_floor()
+        self.aquarium.update_floor()
 
         # Redessiner le fond
-        self.scene.update_background()
+        self.aquarium.update_background()
 
         # Redessiner l'icon d'inventaire
-        self.scene.update_inventaire_icon()
+        self.aquarium.update_inventaire_icon()
 
         # Redessiner la sideBar du market et de l'inventaire
-        self.scene.update_market()
-        self.scene.update_inventaire()
+        self.aquarium.update_market()
+        self.aquarium.update_inventaire()
 
     def keyPressEvent(self, event, /):
         if event.key() == Qt.Key.Key_N:
-
-            self.scene.creer_poisson(niveau=self.n)
+            while self.n <= 55:
+                self.aquarium.creer_poisson(niveau=self.n)
+                self.n += 1
             self.n = (self.n + 1) % (len(EVOLUTION_POISSON) - 1)
-            self.scene.nb += 1
+            self.aquarium.nb += 1
         elif event.key() == Qt.Key.Key_F:
-            for poisson in self.scene.poissons:
+            for poisson in self.aquarium.poissons:
                 poisson.appliquer_direction(-1)
         else:
             super().keyPressEvent(event)
@@ -222,15 +223,22 @@ class Aquarium(QGraphicsScene):
             self.inventaire_poissons.remove(niveau)  # ← enlève la première occurrence
 
         for i in range(n):
-            self.creer_poisson(pos, niveau)
-            if self.poissons:
-                dernier = self.poissons[-1]
-                dernier.setPos(pos.x() - dernier.pixmap().width() / 2, pos.y() - dernier.pixmap().height() / 2)
-                if i == 0:
-                    if collision:
-                        dernier.verifier_collisions()
+            poisson = self.creer_poisson(pos, niveau)
+            if poisson:
+                pos_x, pos_y = clamper_position(
+                    pos.x() - poisson.poisson.width() / 2,
+                    pos.y() - poisson.poisson.height() / 2,
+                    poisson.poisson.width(),
+                    poisson.poisson.height(),
+                    poisson
+                )
+                poisson.setPos(QPointF(pos_x, pos_y))
+
+                if i == 0 and collision:
+                    poisson.verifier_collisions()
+
                 delai = random.randint(500, 2000)
-                QTimer.singleShot(delai, lambda: self.lancer_animation_aleatoire(dernier))
+                QTimer.singleShot(delai, lambda p=poisson: self.lancer_animation_aleatoire(p))
 
         self.refresh_inventaire_ui()
 
@@ -278,7 +286,7 @@ class Aquarium(QGraphicsScene):
         )
         self.addItem(self._drag_poisson_item)
 
-        # ✅ Sauvegarder et remplacer
+        # Sauvegarder et remplacer
         self._original_mouse_move = self.app.view.mouseMoveEvent
         self._original_mouse_release = self.app.view.mouseReleaseEvent
         self.app.view.mouseMoveEvent = self._drag_inventaire_move
@@ -287,6 +295,7 @@ class Aquarium(QGraphicsScene):
     def _drag_inventaire_move(self, event):
         if self._drag_poisson_item:
             pos = self.app.view.mapToScene(event.pos())
+
             self._drag_poisson_item.setPos(
                 pos.x() - self._drag_poisson_item.pixmap().width() / 2,
                 pos.y() - self._drag_poisson_item.pixmap().height() / 2
@@ -298,7 +307,7 @@ class Aquarium(QGraphicsScene):
 
         pos = self.app.view.mapToScene(event.pos())
 
-        # ✅ Restaurer les events souris originaux de QGraphicsView
+        #  Restaurer les events souris originaux de QGraphicsView
         self.app.view.mouseMoveEvent = QGraphicsView.mouseMoveEvent.__get__(self.app.view)
         self.app.view.mouseReleaseEvent = QGraphicsView.mouseReleaseEvent.__get__(self.app.view)
 
@@ -451,7 +460,7 @@ class Aquarium(QGraphicsScene):
             gradient.setColorAt(1, QColorConstants.DarkBlue)
             self.setBackgroundBrush(gradient)
 
-            self._appliquer_mode_nuit()
+        self._appliquer_mode_nuit()
 
     def _appliquer_mode_nuit(self):
         # Assombrir les poissons
@@ -555,47 +564,80 @@ class Aquarium(QGraphicsScene):
         animation_choisie = random.choice(animations)
         animation_choisie(poisson)
 
+    def infos_poisson(self, poisson):
+        """
+        Retourne :
+        larg, haut, pos_x, pos_y, gauche, droite, limite_haut, limite_bas, pres_gauche, pres_droite, pres_haut, pres_bas
+        """
+        larg = poisson.poisson.width()
+        haut = poisson.poisson.height()
+        pos_x = poisson.pos().x()
+        pos_y = poisson.pos().y()
+
+        gauche, droite, limite_haut, limite_bas = calculer_limites(self, larg, haut, poisson)
+
+        marge = 30
+        pres_gauche = pos_x <= gauche + marge
+        pres_droite = pos_x >= droite - marge
+        pres_haut = pos_y <= limite_haut + marge
+        pres_bas = pos_y >= limite_bas - marge
+
+        return (larg, haut, pos_x, pos_y, gauche, droite, limite_haut, limite_bas, pres_gauche, pres_droite, pres_haut,
+                pres_bas)
+
     # ──────────────────────────────────────────────
     #  NAGE HORIZONTALE
     # ──────────────────────────────────────────────
 
     def animation_nager_horizontal(self, poisson):
-        """Déplace le poisson horizontalement."""
+        """Déplace le poisson horizontalement, rebondit sur les murs."""
+        (larg, haut, pos_x, pos_y, gauche, droite, limite_haut, limite_bas, pres_gauche, pres_droite, pres_haut,
+         pres_bas) = self.infos_poisson(poisson)
+
         distance = random.randint(100, int(self.width() - 100))
-        if random.random() < 0.5:
+        if pres_gauche and not pres_droite:
+            pass  # → droite
+        elif pres_droite and not pres_gauche:
+            distance = -distance  # → gauche
+        elif random.random() < 0.5:
             distance = -distance
 
-        larg = poisson.poisson.width()
-        haut = poisson.poisson.height()
-
-        pos_finale_x = poisson.pos().x() + distance
-        pos_finale_y = poisson.pos().y()
-        pos_finale_x, pos_finale_y = clamper_position(pos_finale_x, pos_finale_y, larg, haut, poisson)
-
-        distance_reelle = pos_finale_x - poisson.pos().x()
+        pos_finale_x = pos_x + distance
+        pos_finale_x, pos_finale_y = clamper_position(pos_finale_x, pos_y, larg, haut, poisson)
+        distance_reelle = pos_finale_x - pos_x
 
         if abs(distance_reelle) < 5:
             QTimer.singleShot(500, lambda: self.lancer_animation_aleatoire(poisson))
             return
 
         va_a_gauche = distance_reelle < 0
-
         poisson.setRotation(0)
         poisson.appliquer_direction(va_a_gauche)
 
         pos_finale = QPointF(pos_finale_x, pos_finale_y)
-        duree = int(abs(distance_reelle) * 10 * FACTEUR_LENTEUR)
-        duree = max(duree, 1500)
+        duree = max(int(abs(distance_reelle) * 10 * FACTEUR_LENTEUR), 1500)
+
+        # --- Callback de rebond sur mur ---
+        def sur_mur():
+            """Appelé si le poisson a atteint un mur — il repart dans l'autre sens."""
+            poisson.appliquer_direction(not va_a_gauche)
+            self.animation_nager_horizontal(poisson)
+
+        # Vérifier si la destination est collée contre un mur
+        atteint_mur = abs(pos_finale_x - gauche) < 10 or abs(pos_finale_x - droite) < 10
 
         animation = AnimationPosition(
             poisson, poisson.pos(), pos_finale,
             duration=duree, easing=QEasingCurve.Type.InOutQuad
         )
 
-        animation.anim.finished.connect(
-            lambda: QTimer.singleShot(random.randint(500, 4000),
-                                      lambda: self.lancer_animation_aleatoire(poisson))
-        )
+        if atteint_mur:
+            animation.anim.finished.connect(sur_mur)
+        else:
+            animation.anim.finished.connect(
+                lambda: QTimer.singleShot(random.randint(500, 4000),
+                                          lambda: self.lancer_animation_aleatoire(poisson))
+            )
 
         animation.play()
         poisson.animation_actuelle = animation
@@ -605,35 +647,42 @@ class Aquarium(QGraphicsScene):
     # ──────────────────────────────────────────────
 
     def animation_nager_diagonal(self, poisson):
-        """Déplace le poisson en diagonale avec une inclinaison réaliste."""
-        distance_x = random.randint(100, int(self.width() // 4))
-        distance_y = random.randint(-int(self.height() // 2), int(self.height() // 2))
+        """Déplace le poisson en diagonale, rebondit sur les murs."""
+        (larg, haut, pos_x, pos_y, gauche, droite, limite_haut, limite_bas, pres_gauche, pres_droite, pres_haut,
+         pres_bas) = self.infos_poisson(poisson)
 
-        if random.random() > 0.5:
+        distance_x = random.randint(100, int(self.width() // 4))
+        if pres_gauche and not pres_droite:
+            pass
+        elif pres_droite and not pres_gauche:
+            distance_x = -distance_x
+        elif random.random() > 0.5:
             distance_x = -distance_x
 
-        larg = poisson.poisson.width()
-        haut = poisson.poisson.height()
+        distance_y = random.randint(50, int(self.height() // 2))
+        if pres_haut and not pres_bas:
+            pass
+        elif pres_bas and not pres_haut:
+            distance_y = -distance_y
+        elif random.random() > 0.5:
+            distance_y = -distance_y
 
-        pos_finale_x = poisson.pos().x() + distance_x
-        pos_finale_y = poisson.pos().y() + distance_y
+        pos_finale_x = pos_x + distance_x
+        pos_finale_y = pos_y + distance_y
         pos_finale_x, pos_finale_y = clamper_position(pos_finale_x, pos_finale_y, larg, haut, poisson)
 
-        dx = pos_finale_x - poisson.pos().x()
-        dy = pos_finale_y - poisson.pos().y()
+        dx = pos_finale_x - pos_x
+        dy = pos_finale_y - pos_y
 
         if abs(dx) < 5 and abs(dy) < 5:
             QTimer.singleShot(500, lambda: self.lancer_animation_aleatoire(poisson))
             return
 
         va_a_gauche = dx < 0
-
         poisson.appliquer_direction(va_a_gauche)
 
         angle_rad = math.atan2(dy, abs(dx))
-        angle_deg = int(math.degrees(angle_rad))
-        angle_deg = max(-35, min(35, angle_deg))
-
+        angle_deg = max(-35, min(35, int(math.degrees(angle_rad))))
         if va_a_gauche:
             angle_deg = -angle_deg
 
@@ -645,8 +694,7 @@ class Aquarium(QGraphicsScene):
         poisson._anim_rot_debut = anim_rotation_debut
 
         pos_finale = QPointF(pos_finale_x, pos_finale_y)
-        duree_deplacement = int(math.sqrt(dx * dx + dy * dy) * 15 * FACTEUR_LENTEUR)
-        duree_deplacement = max(duree_deplacement, 2000)
+        duree_deplacement = max(int(math.sqrt(dx * dx + dy * dy) * 15 * FACTEUR_LENTEUR), 2000)
 
         animation = AnimationPosition(
             poisson, poisson.pos(), pos_finale,
@@ -655,6 +703,10 @@ class Aquarium(QGraphicsScene):
 
         anim_rotation_debut.play()
         QTimer.singleShot(duree_rotation, animation.play)
+
+        # Vérifier si la destination touche un mur X ou Y
+        atteint_mur_x = abs(pos_finale_x - gauche) < 10 or abs(pos_finale_x - droite) < 10
+        atteint_mur_y = abs(pos_finale_y - limite_haut) < 10 or abs(pos_finale_y - limite_bas) < 10
 
         def fin_deplacement():
             duree_retour = int(600 * FACTEUR_LENTEUR)
@@ -665,8 +717,12 @@ class Aquarium(QGraphicsScene):
             poisson._anim_rot_fin = anim_rotation_fin
             anim_rotation_fin.play()
 
-            QTimer.singleShot(random.randint(1500, 5000),
-                              lambda: self.lancer_animation_aleatoire(poisson))
+            if atteint_mur_x or atteint_mur_y:
+                # Rebondir : relancer immédiatement une diagonale depuis le mur
+                QTimer.singleShot(duree_retour, lambda: self.animation_nager_diagonal(poisson))
+            else:
+                QTimer.singleShot(random.randint(1500, 5000),
+                                  lambda: self.lancer_animation_aleatoire(poisson))
 
         animation.anim.finished.connect(fin_deplacement)
         poisson.animation_actuelle = animation
