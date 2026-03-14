@@ -393,15 +393,17 @@ class Aquarium(QGraphicsScene):
 
     def update_inventaire_icon(self):
         if self.bouton_inventaire is not None:
-            self.removeItem(self.bouton_inventaire)
-
-        self.bouton_inventaire = PixmapCliquable(
-            chemin_image=str(self.chemin_inventaire),
-            x=self.width() - 55, y=5,
-            scale=50,
-            callback=self.inventaire_clicked
-        )
-        self.addItem(self.bouton_inventaire)
+            nouvelle_pos = QPointF(self.width() - 55, 5)
+            self.bouton_inventaire.pos = nouvelle_pos
+            self.bouton_inventaire.setPos(nouvelle_pos)
+        else:
+            self.bouton_inventaire = PixmapCliquable(
+                chemin_image=str(self.chemin_inventaire),
+                x=self.width() - 55, y=5,
+                scale=50,
+                callback=self.inventaire_clicked
+            )
+            self.addItem(self.bouton_inventaire)
 
     def afficher_icone_drop(self, visible: bool):
         if visible:
@@ -871,5 +873,4 @@ class Aquarium(QGraphicsScene):
                     self.sparkles.remove(a)
 
             animation_sparkles.anim.finished.connect(nettoyer)
-            self.sparkles.append(animation_sparkles)  # garder en mémoire
             animation_sparkles.play()
