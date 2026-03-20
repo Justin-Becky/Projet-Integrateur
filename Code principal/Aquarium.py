@@ -5,7 +5,7 @@ from PySide6 import QtWidgets
 from PySide6.QtCore import QPointF, QRectF, Qt, QEasingCurve, QTimer
 from PySide6.QtWidgets import (QGraphicsScene, QGraphicsPixmapItem, QGraphicsView, QWidget,
                                QVBoxLayout, QLabel, QGraphicsColorizeEffect)
-from PySide6.QtGui import QPixmap, QColorConstants, QLinearGradient, QColor
+from PySide6.QtGui import QPixmap, QColorConstants, QLinearGradient, QColor, QCursor
 from Animations import AnimationBulle, AnimationPosition, AnimationRotation, AnimationScale
 from market import Market
 from inventaire import Inventaire
@@ -42,6 +42,9 @@ class AquariumWidget(QWidget):
         # Scène
         self.aquarium = Aquarium(self)
         self.view.setScene(self.aquarium)
+
+        self.view.mousePressEvent = self._view_mouse_press
+        self.view.mouseReleaseEvent = self._view_mouse_release
 
         self.moula_texte_label = QLabel()
         self.moula_texte_label.setText(F"{MOULA}")
@@ -84,8 +87,37 @@ class AquariumWidget(QWidget):
         elif event.key() == Qt.Key.Key_F:
             for poisson in self.aquarium.poissons:
                 poisson.appliquer_direction(-1)
+        elif event.key() == Qt.Key.Key_C and not event.isAutoRepeat():
+            self.aquarium.activer_mode_chum(True)
+            self.view.mouseMoveEvent = self._chum_mouse_move
         else:
             super().keyPressEvent(event)
+
+    def keyReleaseEvent(self, event, /):
+        if event.key() == Qt.Key.Key_C and not event.isAutoRepeat():
+            self.aquarium.activer_mode_chum(False)
+            self.view.mouseMoveEvent = QGraphicsView.mouseMoveEvent.__get__(self.view)
+        else:
+            super().keyReleaseEvent(event)
+
+    def _chum_mouse_move(self, event):
+        """Suit le curseur en mode chum pour savoir où déposer."""
+        self.aquarium._pos_curseur_scene = self.view.mapToScene(event.pos())
+        QGraphicsView.mouseMoveEvent(self.view, event)
+
+    def _view_mouse_press(self, event):
+        if self.aquarium.mode_chum and event.button() == Qt.MouseButton.LeftButton:
+            self.aquarium._pos_curseur_scene = self.view.mapToScene(event.pos())
+            self.aquarium.deposer_chum_curseur()
+            self.aquarium.timer_chum.start()
+        else:
+            QGraphicsView.mousePressEvent(self.view, event)
+
+    def _view_mouse_release(self, event):
+        if self.aquarium.mode_chum and event.button() == Qt.MouseButton.LeftButton:
+            self.aquarium.timer_chum.stop()
+        else:
+            QGraphicsView.mouseReleaseEvent(self.view, event)
 
 
 # ===================================================
@@ -116,6 +148,15 @@ class Aquarium(QGraphicsScene):
         self.poissons = []  # liste des poissons
         self._animations_bulles = []
 
+        # <editor-fold desc="Mode nourriture (chum)">
+        self.mode_chum = False
+        self._chums = []  # liste des chums actifs dans la scène
+        self.timer_chum = QTimer()
+        self.timer_chum.setInterval(300)  # dépose du chum toutes les 300ms si maintenu
+        self.timer_chum.timeout.connect(self.deposer_chum_curseur)
+        self._pos_curseur_scene = QPointF(0, 0)  # position courante du curseur en coordonnée scène
+        # </editor-fold>
+
         # <editor-fold desc="Dessin du fond dégradé">
         gradient = QLinearGradient(0, 0, 0, self.app.width())
         gradient.setColorAt(0, QColorConstants.Cyan)
@@ -126,7 +167,7 @@ class Aquarium(QGraphicsScene):
         # alterner entre le mode nuit et le mode jour à chaque 30 minutes
         self.timer_jour_nuit = QTimer()
         self.timer_jour_nuit.timeout.connect(self._basculer_jour_nuit)
-        self.timer_jour_nuit.start(30 * 60 * 1000)  # 30 minutes en ms
+        self.timer_jour_nuit.start(30 * 1000)  # 30 minutes en ms
         # </editor-fold>
 
         # --- Le sol en sable ---
@@ -367,7 +408,7 @@ class Aquarium(QGraphicsScene):
 
     def tout_mettre_en_inventaire(self):
         """Met tous les poissons de l'eau dans l'inventaire."""
-        # Copier la liste car on va la modifier pendant l'itération
+        # Copier la liste, car on va la modifier pendant l'itération
         poissons_a_ranger = self.poissons.copy()
         for poisson in poissons_a_ranger:
             self.inventaire_poissons.append(poisson.n)
@@ -446,8 +487,8 @@ class Aquarium(QGraphicsScene):
     def update_background(self):
         """
         Redessine le dégradé du fond.
-        soit en mode jour.
-        soit en mode nuit.
+        Soit en mode jour.
+        Soit en mode nuit.
         """
         if self.est_nuit:
             gradient = QLinearGradient(0, 0, 0, self.height())
@@ -648,37 +689,43 @@ class Aquarium(QGraphicsScene):
     #  NAGE DIAGONALE
     # ──────────────────────────────────────────────
 
-    def animation_nager_diagonal(self, poisson):
+    def animation_nager_diagonal(self, poisson, pos_finale=None):
         """Déplace le poisson en diagonale, rebondit sur les murs."""
         (larg, haut, pos_x, pos_y, gauche, droite, limite_haut, limite_bas, pres_gauche, pres_droite, pres_haut,
          pres_bas) = self.infos_poisson(poisson)
+        if pos_finale is None:
+            distance_x = random.randint(100, int(self.width() // 4))
+            if pres_gauche and not pres_droite:
+                pass
+            elif pres_droite and not pres_gauche:
+                distance_x = -distance_x
+            elif random.random() > 0.5:
+                distance_x = -distance_x
 
-        distance_x = random.randint(100, int(self.width() // 4))
-        if pres_gauche and not pres_droite:
-            pass
-        elif pres_droite and not pres_gauche:
-            distance_x = -distance_x
-        elif random.random() > 0.5:
-            distance_x = -distance_x
+            distance_y = random.randint(50, int(self.height() // 2))
+            if pres_haut and not pres_bas:
+                pass
+            elif pres_bas and not pres_haut:
+                distance_y = -distance_y
+            elif random.random() > 0.5:
+                distance_y = -distance_y
 
-        distance_y = random.randint(50, int(self.height() // 2))
-        if pres_haut and not pres_bas:
-            pass
-        elif pres_bas and not pres_haut:
-            distance_y = -distance_y
-        elif random.random() > 0.5:
-            distance_y = -distance_y
+            pos_finale_x = pos_x + distance_x
+            pos_finale_y = pos_y + distance_y
+            pos_finale_x, pos_finale_y = clamper_position(pos_finale_x, pos_finale_y, larg, haut, poisson)
 
-        pos_finale_x = pos_x + distance_x
-        pos_finale_y = pos_y + distance_y
-        pos_finale_x, pos_finale_y = clamper_position(pos_finale_x, pos_finale_y, larg, haut, poisson)
+            dx = pos_finale_x - pos_x
+            dy = pos_finale_y - pos_y
 
-        dx = pos_finale_x - pos_x
-        dy = pos_finale_y - pos_y
+            if abs(dx) < 5 and abs(dy) < 5:
+                QTimer.singleShot(500, lambda: self.lancer_animation_aleatoire(poisson))
+                return
+        else:
+            pos_finale_x = pos_finale.x()
+            pos_finale_y = pos_finale.y()
 
-        if abs(dx) < 5 and abs(dy) < 5:
-            QTimer.singleShot(500, lambda: self.lancer_animation_aleatoire(poisson))
-            return
+            dx = pos_finale.x() - pos_x
+            dy = pos_finale.y() - pos_y
 
         va_a_gauche = dx < 0
         poisson.appliquer_direction(va_a_gauche)
@@ -801,7 +848,7 @@ class Aquarium(QGraphicsScene):
         if poisson1.n >= len(EVOLUTION_POISSON) - 1:
             return
 
-        # Bloquer toute re-fusion pendant l'animation
+        # Bloquer toute refusion pendant l'animation
         poisson1.pris = True
         poisson2.pris = True
 
@@ -874,3 +921,208 @@ class Aquarium(QGraphicsScene):
 
             animation_sparkles.anim.finished.connect(nettoyer)
             animation_sparkles.play()
+
+    def activer_mode_chum(self, actif: bool):
+        """Active ou désactive le mode nourriture — change le curseur."""
+        self.mode_chum = actif
+        if actif:
+            chemin = str(IMG_DIR / "chum_can.png")
+            pixmap_curseur = QPixmap(chemin).scaled(
+                32, 32,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation
+            )
+            self.app.view.setCursor(Qt.CursorShape.CrossCursor)  # fallback si pas d'image
+            curseur = QCursor(pixmap_curseur, 16, 16)  # hotspot au centre
+            self.app.view.setCursor(curseur)
+        else:
+            self.timer_chum.stop()
+            self.app.view.setCursor(Qt.CursorShape.ArrowCursor)
+
+    def deposer_chum_curseur(self):
+        """Dépose un chum à la position actuelle du curseur."""
+        self.deposer_chum(self._pos_curseur_scene)
+
+    def deposer_chum(self, pos: QPointF):
+        """Crée un chum qui tombe depuis pos vers le sable."""
+        from pixmap import Chum
+        from Animations import AnimationChum
+
+        y_sable = random.randint(int(self.height()) - 100, int(self.height()) - 15)
+
+        chum = Chum(pos, y_sable)
+        self.addItem(chum)
+        self._chums.append(chum)
+
+        animation = AnimationChum(
+            chum,
+            y_sable=y_sable,
+            on_tick=self._verifier_chum_mangeable,
+            on_arrive=self._chum_arrive_sable,
+            duration=int(3000 * FACTEUR_LENTEUR)
+        )
+        chum._animation = animation
+        animation.play()
+
+    def _verifier_chum_mangeable(self, chum):
+        """Appelé à chaque frame — cherche un poisson proche qui peut manger ce chum."""
+        if chum.est_mange:
+            return
+
+        pos_chum = chum.pos()
+        hauteur = self.height()
+        rayon = 80  # distance max pour qu'un poisson réagisse
+
+        for poisson in self.poissons:
+            if poisson.pris:
+                continue
+
+            # ── Vérifier si ce type de poisson peut manger à cette profondeur ──
+            if not self._poisson_peut_manger(poisson, pos_chum.y(), hauteur):
+                continue
+
+            # ── Vérifier la distance ──
+            dp = poisson.pos() - pos_chum
+            distance = math.sqrt(dp.x() ** 2 + dp.y() ** 2)
+            if distance <= rayon:
+                self._poisson_mange_chum(poisson, chum)
+                break  # un seul poisson par chum
+
+    @staticmethod
+    def _poisson_peut_manger(poisson, y_chum: float, hauteur_scene: float) -> bool:
+        """
+        Retourne True si ce poisson peut atteindre le chum à cette profondeur.
+            - Mouettes (n==22) : seulement dans le tiers supérieur
+            - Crabes (n==23) : uniquement dans le tiers inférieur
+            - Poissons profondeurs : uniquement dans les 2/3 inférieurs
+            - Poissons tropicaux : milieu (entre 1/4 et 3/4 de la hauteur).
+            Autres : partout
+        """
+        tiers = hauteur_scene / 3
+        quart = hauteur_scene / 4
+
+        if poisson.n == 22:  # mouette — surface seulement
+            return y_chum < tiers
+        elif poisson.n == 23:  # crabe — fond seulement
+            return y_chum > 2 * tiers
+        elif 24 <= poisson.n <= 33:  # poissons des profondeurs
+            return y_chum > tiers
+        elif poisson.n in config.POISSONS_TROPICAUX:
+            return quart < y_chum < 3 * quart
+        else:
+            return True
+
+    def _poisson_mange_chum(self, poisson, chum):
+        """Le poisson nage vers le chum, le mange, et joue l'animation."""
+        chum.est_mange = True
+        poisson.pris = True
+
+        # Arrêter l'animation du poisson et le diriger vers le chum
+        if poisson.animation_actuelle:
+            poisson.animation_actuelle.stop()
+            poisson.animation_actuelle = None
+
+        chum_x = chum.pos().x()
+        chum_y = chum.pos().y()
+        poisson_w = poisson.poisson.width()
+        poisson_h = poisson.poisson.height()
+
+        # ── Direction basée sur la position du chum, pas pos_cible ──
+        va_a_gauche = chum_x < poisson.pos().x()
+        poisson.appliquer_direction(va_a_gauche)
+
+        if va_a_gauche:
+            pos_cible = QPointF(
+                chum_x,  # bouche gauche alignée sur le chum
+                chum_y - poisson_h / 2
+            )
+        else:
+            pos_cible = QPointF(
+                chum_x - poisson_w,  # bouche droite alignée sur le chum
+                chum_y - poisson_h / 2
+            )
+
+        # ── Calculer l'angle réel vers le chum ──
+        dx = pos_cible.x() - poisson.pos().x()
+        dy = pos_cible.y() - poisson.pos().y()
+        angle_rad = math.atan2(dy, abs(dx))
+        angle_deg = max(-35, min(35, int(math.degrees(angle_rad))))
+        if va_a_gauche:
+            angle_deg = -angle_deg
+
+        # ── Rotation vers le chum ──
+        duree_rotation = int(300 * FACTEUR_LENTEUR)
+        anim_rot = AnimationRotation(
+            poisson, poisson.rotation(), angle_deg,
+            duration=duree_rotation, easing=QEasingCurve.Type.InOutQuad
+        )
+        poisson._anim_rot_debut = anim_rot
+        anim_rot.play()
+
+        # ── Nage vers le chum — démarre APRÈS la rotation ──
+        duree_nage = int(600 * FACTEUR_LENTEUR)
+        anim_nage = AnimationPosition(
+            poisson, poisson.pos(), pos_cible,
+            duration=duree_nage, easing=QEasingCurve.Type.OutQuad
+        )
+        poisson.animation_actuelle = anim_nage
+
+        QTimer.singleShot(duree_rotation, anim_nage.play)
+
+        def apres_nage():
+            # Remettre la rotation à 0 avant l'animation manger
+            anim_rot_retour = AnimationRotation(
+                poisson, poisson.rotation(), 0,
+                duration=int(150 * FACTEUR_LENTEUR), easing=QEasingCurve.Type.InOutQuad
+            )
+            poisson._anim_rot_fin = anim_rot_retour
+            anim_rot_retour.play()
+
+            self._supprimer_chum(chum)
+            # Animation manger : grossit puis revient
+            anim_manger = AnimationScale(
+                poisson,
+                scale_debut=poisson.scale(),
+                scale_fin=1.2,
+                duration=int(200 * FACTEUR_LENTEUR),
+                easing=QEasingCurve.Type.OutBack
+            )
+
+            def apres_grossissement():
+                anim_retour = AnimationScale(
+                    poisson,
+                    scale_debut=poisson.scale(),
+                    scale_fin=1.0,
+                    duration=int(250 * FACTEUR_LENTEUR),
+                    easing=QEasingCurve.Type.OutBounce
+                )
+
+                def apres_retour():
+                    poisson.pris = False
+                    QTimer.singleShot(
+                        random.randint(500, 2000),
+                        lambda: self.lancer_animation_aleatoire(poisson)
+                    )
+
+                anim_retour.anim.finished.connect(apres_retour)
+                poisson._anim_scale = anim_retour
+                anim_retour.play()
+
+            anim_manger.anim.finished.connect(apres_grossissement)
+            poisson._anim_scale = anim_manger
+            poisson.pris = True
+            anim_manger.play()
+
+        if poisson.animation_actuelle is not None:
+            poisson.animation_actuelle.anim.finished.connect(apres_nage)
+
+    def _chum_arrive_sable(self, chum):
+        """Le chum s'est déposé sur le sable — disparaît après 20 secondes."""
+        QTimer.singleShot(20_000, lambda: self._supprimer_chum(chum))
+
+    def _supprimer_chum(self, chum):
+        """Retire le chum de la scène proprement."""
+        if chum in self._chums:
+            self._chums.remove(chum)
+        if chum.scene():
+            self.removeItem(chum)

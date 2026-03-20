@@ -336,3 +336,92 @@ class AnimationScale(QObject):
             duration=duration,
             easing=QEasingCurve.Type.Linear
         )
+
+
+class AnimationChum(QObject):
+    """
+    Animation de descente d'un morceau de chum vers le sable.
+
+    Le chum tombe depuis le point de clic vers le sable :
+        - Légère dérive horizontale aléatoire (comme un vrai morceau qui coule)
+        - Rotation lente sur lui-même
+        - Scaling 0.5 → 1.0 (grossit légèrement en descendant)
+        - À chaque tick, notifie la scène pour vérifier si un poisson peut manger
+
+    La scène est notifiée via le callback on_tick(chum) à chaque frame.
+    """
+
+    def __init__(self, chum, y_sable: float,
+                 on_tick,
+                 on_arrive,
+                 duration: int = 4000):
+        """
+        Paramètres :
+            chum        → l'item graphique Chum
+            y_sable     → position Y du sable (destination finale)
+            on_tick     → callback(chum) appelé à chaque frame — vérifie les collisions
+            on_arrive   → callback(chum) appelé quand le chum touche le sable
+            duration    → durée totale de la descente
+        """
+        super().__init__()
+        self.chum = chum
+        self.on_tick = on_tick
+        self.on_arrive = on_arrive
+
+        # ── Points clés du trajet ──
+        pos_depart = chum.pos()
+
+        # Légère dérive horizontale pour un effet naturel
+        derive = random.uniform(-30, 30)
+
+        self.pos_a = QPointF(pos_depart)
+        self.pos_b = QPointF(
+            pos_depart.x() + derive * 0.3,
+            pos_depart.y() + (y_sable - pos_depart.y()) * 0.4
+        )
+        self.pos_c = QPointF(
+            pos_depart.x() + derive,
+            y_sable
+        )
+
+        # ── Animation principale 0.0 → 1.0 ──
+        self.anim = QVariantAnimation(self)
+        self.anim.setStartValue(0.0)
+        self.anim.setEndValue(1.0)
+        self.anim.setDuration(duration)
+        self.anim.setEasingCurve(QEasingCurve(QEasingCurve.Type.InQuad))  # accélère en tombant
+        self.anim.valueChanged.connect(self._on_value)
+        self.anim.finished.connect(self._on_finished)
+
+    def _on_value(self, v: float):
+        """Met à jour position, rotation et scale à chaque tick."""
+
+        if self.chum.est_mange:
+            self.anim.stop()
+            return
+
+        # ── Interpolation Bézier quadratique A → B → C ──
+        mt = 1 - v
+        x = mt * mt * self.pos_a.x() + 2 * mt * v * self.pos_b.x() + v * v * self.pos_c.x()
+        y = mt * mt * self.pos_a.y() + 2 * mt * v * self.pos_b.y() + v * v * self.pos_c.y()
+        self.chum.setPos(QPointF(x, y))
+
+        # ── Rotation lente ──
+        self.chum.setRotation(v * 180)
+
+        # ── Scale 0.5 → 1.0 ──
+        self.chum.setScale(0.5 + 0.5 * v)
+
+        # ── Notifier la scène pour vérifier les collisions ──
+        if self.on_tick:
+            self.on_tick(self.chum)
+
+    def _on_finished(self):
+        if not self.chum.est_mange and self.on_arrive:
+            self.on_arrive(self.chum)
+
+    def play(self):
+        self.anim.start()
+
+    def stop(self):
+        self.anim.stop()

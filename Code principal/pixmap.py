@@ -287,3 +287,44 @@ class PixmapCliquable(QGraphicsPixmapItem):
 
     def hoverLeaveEvent(self, event):
         self.setOpacity(1)   # Remet normal quand on ne survol plus
+
+
+# ===================================================
+# Chum (nourriture)
+# ===================================================
+class Chum(QGraphicsPixmapItem):
+    """Morceau de nourriture qui descend vers le sable."""
+
+    # Zones de profondeur — détermine quels poissons peuvent manger ce chum
+    ZONE_SURFACE = "surface"   # mouettes (n==22)
+    ZONE_MILIEU = "milieu"    # poissons tropicaux
+    ZONE_FOND = "fond"      # crabes (n==23), poissons des profondeurs (n>=24)
+
+    def __init__(self, pos_depart: QPointF, y_sable: float):
+        super().__init__()
+
+        self.est_mange = False   # verrou anti-double-collision
+        self.zone = None    # assignée à la fin de la descente
+        self.y_sable = y_sable
+        self.y_depart = pos_depart.y()
+
+        chemin = IMG_DIR / "chum.png"
+        pixmap = QPixmap(str(chemin)).scaled(
+            24, 24,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation
+        )
+        self.setPixmap(pixmap)
+        self.setTransformOriginPoint(pixmap.width() / 2, pixmap.height() / 2)
+        self.setZValue(-10)
+        self.setPos(pos_depart)
+
+    def zone_depuis_y(self, y: float, hauteur_scene: float) -> str:
+        """Détermine la zone du chum selon sa position Y finale."""
+        tiers = hauteur_scene / 3
+        if y < tiers:
+            return self.ZONE_SURFACE
+        elif y < 2 * tiers:
+            return self.ZONE_MILIEU
+        else:
+            return self.ZONE_FOND
